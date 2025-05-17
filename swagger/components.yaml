@@ -1,0 +1,14 @@
+components:
+  schemas:
+    JobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+    UploadInput:
+      type: object
+      properties:
+        file_url:
+          type: string
