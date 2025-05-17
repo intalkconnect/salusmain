@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   salus-api:
     build: .
@@ -8,12 +6,10 @@ services:
       - "3000:3000"
     volumes:
       - .:/app
-      - ./uploads:/app/uploads  # <-- esta linha é o que importa aqui
-    env_file:
-      - .env
+      - ./uploads:/app/uploads
     depends_on:
       - redis
-    command: npm run all
+    command: sh -c "[ -f temp_env ] && mv temp_env .env || echo '.env já existe'; npm run all"
 
   redis:
     image: redis:7
