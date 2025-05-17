@@ -24,6 +24,10 @@ app.use("/estimate", estimateRoutes);
 app.use("/clientes", clientesRoutes);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(specs));
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // Bull Board moderno
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath("/admin/queues");
