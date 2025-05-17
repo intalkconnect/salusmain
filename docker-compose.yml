@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  salus-api:
+    build: .
+    container_name: salus-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads  # <-- esta linha é o que importa aqui
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    command: npm run all
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
