@@ -1,10 +1,17 @@
+require('dotenv').config();
 // src/utils/visionOCR.js
 const vision = require("@google-cloud/vision").v1;
 const fs = require("fs").promises;
 const mime = require("mime-types");
 
+const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON); // variável com o conteúdo inteiro do JSON
+
 const client = new vision.ImageAnnotatorClient({
-  keyFilename: "./credentials/vision-key.json",
+  credentials: {
+    client_email: credentials.client_email,
+    private_key: credentials.private_key,
+  },
+  projectId: credentials.project_id,
 });
 
 
