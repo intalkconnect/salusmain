@@ -1,9 +1,16 @@
+require('dotenv').config();
 // src/utils/fileUtils.js
 const vision = require("@google-cloud/vision");
 const path = require("path");
 
+const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON); // variável com o conteúdo inteiro do JSON
+
 const client = new vision.ImageAnnotatorClient({
-  keyFilename: path.resolve(__dirname, "../../credentials/vision-key.json"),
+  credentials: {
+    client_email: credentials.client_email,
+    private_key: credentials.private_key,
+  },
+  projectId: credentials.project_id,
 });
 
 async function isManuscriptImage(filePath) {
