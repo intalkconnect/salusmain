@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "worker": "nodemon workers/worker.js",
-    "start": "node index.js",
-    "start:worker": "node workers/worker.js",
-    "start:all": "concurrently \"npm run start\" \"npm run start:worker\""
+"start": "node index.js",
+"start:worker": "node workers/worker.js",
+"start:all": "concurrently \"npm run start\" \"npm run start:worker\""
   },
   "keywords": [],
   "author": "",
