@@ -46,7 +46,7 @@ async function extractTextFromPDF(filePath) {
       requests: [{
         inputConfig,
         features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-        pages: [1, 2, 3, 4, 5], // ou dinamicamente se preferir
+        // ❌ NÃO definimos `pages` para processar TODAS as páginas
       }],
     };
 
@@ -66,4 +66,3 @@ module.exports = {
   isManuscriptImage,
   extractTextFromPDF,
 };
-
