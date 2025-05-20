@@ -4,8 +4,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "worker": "node workers/worker.js",
-    "all": "concurrently \"npm run dev\" \"npm run worker\""
+    "worker": "nodemon src/workers/worker.js",
+    "start": "node src/index.js",
+    "start:worker": "node src/workers/worker.js",
+    "start:all": "concurrently \"npm run start\" \"npm run start:worker\""
   },
   "keywords": [],
   "author": "",
