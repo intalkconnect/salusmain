@@ -4,9 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "worker": "nodemon src/workers/worker.js",
-    "start": "node src/index.js",
-    "start:worker": "node src/workers/worker.js",
+    "worker": "nodemon workers/worker.js",
+    "start": "node index.js",
+    "start:worker": "node workers/worker.js",
     "start:all": "concurrently \"npm run start\" \"npm run start:worker\""
   },
   "keywords": [],
