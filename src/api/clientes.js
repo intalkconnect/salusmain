@@ -5,6 +5,32 @@ const { authMiddleware } = require("./auth");
 
 const router = express.Router();
 
+// DELETE /clientes/:id
+router.delete("/:id", authMiddleware, async (req, res) => {
+  const client = req.client;
+
+  if (!client.is_global) {
+    return res
+      .status(403)
+      .json({ detail: "Apenas global API key pode excluir clientes" });
+  }
+
+  const clienteId = req.params.id;
+
+  const { error } = await supabase
+    .from("clientes")
+    .delete()
+    .eq("id", clienteId);
+
+  if (error) {
+    return res
+      .status(500)
+      .json({ detail: "Erro ao excluir cliente", error });
+  }
+
+  res.status(204).send(); // 204 No Content indica sucesso sem corpo na resposta
+});
+
 // GET /clientes
 router.get("/", authMiddleware, async (req, res) => {
   const client = req.client;
