@@ -69,7 +69,6 @@ async function countJobs(clientId, start, end = null) {
   return new Set(data?.map((r) => r.job_id)).size;
 }
 
-// POST /clientes
 router.post("/", authMiddleware, async (req, res) => {
   const client = req.client;
   if (!client.is_global) {
@@ -78,12 +77,10 @@ router.post("/", authMiddleware, async (req, res) => {
 
   const { nome, openai_key, api_key } = req.body;
 
-  // Validação de campos obrigatórios
   if (!api_key || !openai_key) {
     return res.status(400).json({ detail: "Campos obrigatórios: api_key e openai_key" });
   }
 
-  // Verificar duplicidade de api_key
   const { data: existing, error: existingError } = await supabase
     .from("clientes")
     .select("id")
@@ -91,14 +88,13 @@ router.post("/", authMiddleware, async (req, res) => {
     .maybeSingle();
 
   if (existingError) {
-    return res.status(500).json({ detail: "Erro ao verificar API key", error: existingError });
+    return res.status(500).json({ detail: "Erro ao verificar api_key", error: existingError });
   }
 
   if (existing) {
     return res.status(400).json({ detail: "API key já cadastrada" });
   }
 
-  // Inserir novo cliente
   const { data, error } = await supabase.from("clientes").insert([
     {
       id: uuidv4(),
@@ -113,8 +109,13 @@ router.post("/", authMiddleware, async (req, res) => {
     return res.status(500).json({ detail: "Erro ao criar cliente no banco", error });
   }
 
+  if (!data || !data.length) {
+    return res.status(500).json({ detail: "Cliente não foi criado corretamente", data });
+  }
+
   res.status(201).json({ ...data[0], uso: 0, uso_atual: 0, uso_anterior: 0 });
 });
+
 
 // PATCH /clientes/:id
 router.patch("/:id", authMiddleware, async (req, res) => {
