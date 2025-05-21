@@ -110,7 +110,8 @@ router.post("/", authMiddleware, async (req, res) => {
       api_key,
       ativo: true,
     },
-  ]);
+  ])
+  .select();
 
   if (error) {
     return res.status(500).json({ detail: "Erro ao criar cliente no banco", error });
