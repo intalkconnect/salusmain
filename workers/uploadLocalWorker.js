@@ -2,7 +2,7 @@ require("dotenv").config();
 const fs = require("fs").promises;
 const path = require("path");
 const { supabase } = require("../src/utils/supabaseClient");
-const { log, error } = require("../utils/logger");
+const { log, error } = require("../src/utils/logger");
 const cron = require("node-cron");
 
 // Configurações
