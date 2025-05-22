@@ -1,7 +1,7 @@
 // src/workers/worker.js
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const { supabase } = require("../src/utils/supabaseClient");
+const { supabase, supabaseBucket } = require("../src/utils/supabaseClient");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
 const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
@@ -126,7 +126,7 @@ const worker = new Worker(
         const contentType = mimeMap[ext] || "application/octet-stream";
 
         const { error: uploadError } = await supabase.storage
-          .from("uploads")
+          .from(supabaseBucket)
           .upload(`jobs/${jobId}/${filename}`, fileData, {
             contentType,
             upsert: true,
