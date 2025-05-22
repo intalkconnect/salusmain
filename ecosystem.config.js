@@ -3,20 +3,20 @@ module.exports = {
     {
       name: 'api',
       script: 'index.js',
-      instances: '1',
-      exec_mode: 'fork',
+      instances: 'max',
+      exec_mode: 'cluster',
     },
     {
       name: 'worker-upload-local',
       script: 'workers/uploadLocalWorker.js',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: '1',
+      exec_mode: 'fork',
     },
     {
       name: 'worker-process-job',
       script: 'workers/processJobWorker.js',
-      instances: 'max',
-      exec_mode: 'cluster',
+      instances: '1',
+      exec_mode: 'fork',
     },
     {
       name: 'worker-upload-bucket',
