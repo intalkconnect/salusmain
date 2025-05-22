@@ -25,6 +25,8 @@ const worker = new Worker(
     const startedAt = new Date();
     const tempFilePath = filepath;
 
+    const extClean = (ext || path.extname(filepath).replace(".", "").toLowerCase());
+
     try {
       log(`📥 Processando job ${jobId}`);
 
