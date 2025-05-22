@@ -4,7 +4,7 @@ const { Worker } = require("bullmq");
 const { supabase } = require("../src/utils/supabaseClient");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
-const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
+const { isManuscriptImage, extractTextFromPDF } = require("../src/utils/fileUtils");
 const { log, error } = require("../src/utils/logger");
 const path = require("path");
 
@@ -38,7 +38,7 @@ const worker = new Worker(
       let result;
 
       if ([".jpg", ".jpeg", ".png"].includes(extClean)) {
-        const isManuscript = await isManuscriptImage(filepath);
+        const isManuscript = await isManuscriptImage(filepath, openaiKey, jobId);
         if (isManuscript) {
           await logJobMetric(
             clientId,
@@ -57,7 +57,7 @@ const worker = new Worker(
         result = await callOpenAIWithVision(filepath, openaiKey, jobId);
       } else if (extClean === ".pdf") {
         log("📄 Extraindo texto de PDF...");
-        const { text } = await extractTextFromPDF(filepath);
+        const { text } = await extractTextFromPDF(filepath, openaiKey, jobId);
         if (!text || text.trim().length < 30) {
           await logJobMetric(
             clientId,
