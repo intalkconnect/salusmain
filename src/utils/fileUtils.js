@@ -30,25 +30,34 @@ function calculateBoundingBoxArea(boundingBox) {
 
 async function isManuscriptImage(filePath) {
   try {
+    console.log(`🟢 Iniciando análise de manuscrito para: ${filePath}`);
+
     const [result] = await client.documentTextDetection(filePath);
     const annotation = result.fullTextAnnotation;
     const pages = annotation?.pages || [];
 
     let totalBlocks = 0;
     let lowConfidenceBlocks = 0;
+    let ignoredSmallBlocks = 0;
 
     for (const page of pages) {
       for (const block of page.blocks || []) {
         const area = calculateBoundingBoxArea(block.boundingBox);
+        const confidence = block.confidence ?? 1;
 
-        // Ignorar blocos muito pequenos (ex.: assinaturas, selos, ruídos)
-        if (area < 10000) continue;
+        console.log(`📦 Block -> Area: ${area}, Confidence: ${confidence}`);
+
+        if (area < 10000) {
+          ignoredSmallBlocks++;
+          console.log("🚫 Block ignorado (pequeno)");
+          continue;
+        }
 
         totalBlocks++;
-        const confidence = block.confidence || 1;
 
         if (confidence < 0.7) {
           lowConfidenceBlocks++;
+          console.log("⚠️ Block marcado como baixa confiança");
         }
       }
     }
@@ -56,45 +65,23 @@ async function isManuscriptImage(filePath) {
     const ratioLowConfidence = totalBlocks > 0 ? lowConfidenceBlocks / totalBlocks : 0;
     const isLikelyHandwritten = ratioLowConfidence > 0.5;
 
+    console.log("===== 📊 Resultado da Análise =====");
+    console.log(`Total de blocos válidos: ${totalBlocks}`);
+    console.log(`Blocos ignorados (pequenos): ${ignoredSmallBlocks}`);
+    console.log(`Blocos baixa confiança: ${lowConfidenceBlocks}`);
+    console.log(`Ratio baixa confiança: ${(ratioLowConfidence * 100).toFixed(2)}%`);
+    console.log(`Classificação final: ${isLikelyHandwritten ? "🖋️ Manuscrito" : "📄 Digitado"}`);
+    console.log("===================================");
+
     return {
       isHandwritten: isLikelyHandwritten,
       ratioLowConfidence,
       totalBlocks,
       lowConfidenceBlocks,
+      ignoredSmallBlocks,
     };
   } catch (err) {
-    console.error("Erro ao detectar manuscrito:", err.message);
+    console.error("❌ Erro ao detectar manuscrito:", err.message);
     return { isHandwritten: false, ratioLowConfidence: 0, totalBlocks: 0 };
   }
 }
-
-async function extractTextFromPDF(filePath) {
-  try {
-    const inputConfig = {
-      mimeType: mime.lookup(filePath) || "application/pdf",
-      content: (await fs.readFile(filePath)).toString("base64"),
-    };
-
-    const request = {
-      requests: [{
-        inputConfig,
-        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-      }],
-    };
-
-    const [response] = await client.batchAnnotateFiles(request);
-    const responses = response.responses?.[0]?.responses || [];
-
-    const text = responses.map(r => r.fullTextAnnotation?.text || "").join("\n");
-
-    return { text };
-  } catch (err) {
-    console.error("Erro ao extrair texto do PDF via Vision:", err.message);
-    return { text: "" };
-  }
-}
-
-module.exports = {
-  isManuscriptImage,
-  extractTextFromPDF,
-};
