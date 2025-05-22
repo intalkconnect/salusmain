@@ -5,9 +5,8 @@ const path = require("path");
 const axios = require("axios");
 const { supabase } = require("../src/utils/supabaseClient");
 const { log, error } = require("../src/utils/logger");
-const { processJobQueue } = require("../src/jobs/processJob");
+const { processJobQueue } = require("../src/jobs/processJob"); // 🔥 Importa a fila do processJob
 
-// 🔥 Conexão Redis obrigatória
 const connection = {
   connection: {
     url: process.env.REDIS_URL,
@@ -53,7 +52,6 @@ const worker = new Worker(
         log(`🌐 Arquivo baixado para uploads/: ${filename}`);
       }
 
-      // Atualiza status no banco
       await supabase.from("job_metrics")
         .update({
           status: "processing",
