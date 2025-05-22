@@ -1,7 +1,8 @@
-// src/workers/worker.js
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const { supabase, supabaseBucket } = require("../src/utils/supabaseClient");
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const { s3 } = require("../src/utils/minioClient");
+const { supabase } = require("../src/utils/supabaseClient");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
 const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
@@ -15,18 +16,18 @@ const connection = {
   },
 };
 
+const BUCKET_NAME = process.env.MINIO_BUCKET;
+
 const worker = new Worker(
   "process_job",
   async (job) => {
     const { filepath, ext, filename, jobId, clientId, openaiKey } = job.data;
     const startedAt = new Date();
-
     const tempFilePath = filepath;
 
     try {
       log(`📥 Processando job ${jobId}`);
 
-      // 🔍 Verifica se o arquivo existe
       if (!fs.existsSync(tempFilePath)) {
         throw new Error(`Arquivo não encontrado em ${tempFilePath}`);
       }
@@ -114,31 +115,27 @@ const worker = new Worker(
       error(`❌ Erro no job ${jobId}:`, err);
       await logJobMetric(clientId, jobId, ext, "falha", err.message?.slice(0, 200), startedAt, new Date());
     } finally {
-      // 🔥 Upload para bucket Supabase
+      // 🔥 Upload para MinIO
       try {
         const fileData = fs.readFileSync(tempFilePath);
-        const mimeMap = {
+        const contentType = {
           pdf: "application/pdf",
           jpg: "image/jpeg",
           jpeg: "image/jpeg",
           png: "image/png",
+        }[extClean] || "application/octet-stream";
+
+        const uploadParams = {
+          Bucket: BUCKET_NAME,
+          Key: `jobs/${jobId}/${filename}`,
+          Body: fileData,
+          ContentType: contentType,
         };
-        const contentType = mimeMap[ext] || "application/octet-stream";
 
-        const { error: uploadError } = await supabase.storage
-          .from(supabaseBucket)
-          .upload(`jobs/${jobId}/${filename}`, fileData, {
-            contentType,
-            upsert: true,
-          });
-
-        if (uploadError) {
-          error(`❌ Falha ao enviar para bucket: ${uploadError.message}`);
-        } else {
-          log(`📤 Arquivo enviado para o bucket: ${filename}`);
-        }
+        await s3.send(new PutObjectCommand(uploadParams));
+        log(`📤 Arquivo enviado para o bucket MinIO: ${filename}`);
       } catch (uploadErr) {
-        error(`❌ Erro no upload para bucket: ${uploadErr.message}`);
+        error(`❌ Erro no upload para MinIO: ${uploadErr.message}`);
       }
 
       // 🔥 Remove o arquivo temporário
