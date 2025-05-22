@@ -1,6 +1,7 @@
 // src/utils/openaiHelper.js
 const fs = require("fs").promises;
-const OpenAI = require("openai");   // ➡️  import correto em CJS
+const path = require("path");
+const OpenAI = require("openai");   // ➡️ import correto em CJS
 
 /**
  * Cria um client OpenAI com a sua API key
@@ -15,24 +16,34 @@ function makeOpenAI(apiKey) {
 async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
   const buffer = await fs.readFile(filePath);
-  const b64 = buffer.toString("base64");
+  const ext = path.extname(filePath).substring(1) || "png";
+  const dataUrl = `data:image/${ext};base64,${buffer.toString("base64")}`;
 
-  // observe a nova forma de chamar o chat-completion
+  const messages = [
+    {
+      role: "system",
+      content: 
+        "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed)."
+    },
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: 
+            "Por favor, extraia todo o texto desta imagem e retorne apenas um JSON com chaves 'text' e 'isHandwritten'."
+        },
+        {
+          type: "image_url",
+          image_url: { url: dataUrl }
+        }
+      ]
+    }
+  ];
+
   const resp = await client.chat.completions.create({
     model: "gpt-4o-mini",      // ou outro GPT com visão
-    messages: [
-      {
-        role: "system",
-        content:
-          "Você é um assistente que faz OCR de imagens e classifica se o texto é manuscrito.",
-      },
-      {
-        role: "user",
-        content:
-          `data:image/png;base64,${b64}\n\n` +
-          "1) Retorne JSON { text: string, isHandwritten: boolean }",
-      },
-    ],
+    messages
   });
 
   return JSON.parse(resp.choices[0].message.content);
@@ -49,10 +60,10 @@ async function callOpenAIWithText(text, openaiKey, jobId) {
       {
         role: "system",
         content:
-          "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto médico.",
+          "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto médico."
       },
-      { role: "user", content: text },
-    ],
+      { role: "user", content: text }
+    ]
   });
 
   return JSON.parse(resp.choices[0].message.content);
