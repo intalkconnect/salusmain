@@ -34,13 +34,16 @@
 
 const express = require("express");
 const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const { v4: uuidv4 } = require("uuid");
+const axios = require("axios");
+const { supabase } = require("../utils/supabaseClient");
 const { processJobQueue } = require("../jobs/processJob");
 const { authMiddleware } = require("./auth");
-const { supabase } = require("../utils/supabaseClient");
 
 const router = express.Router();
-const upload = multer({ dest: "uploads_tmp/" }); // Pasta temporária
+const upload = multer({ dest: "uploads/" });
 
 router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
   const client = req.client;
@@ -49,52 +52,63 @@ router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
     return res.status(403).json({ detail: "Global API key não autorizada para upload" });
   }
 
-  const jobId = uuidv4();
-  const fileFromUrl = req.body.file_url;
-  const fileFromForm = req.file;
-
-  if (!fileFromUrl && !fileFromForm) {
-    return res.status(400).json({ detail: "Nenhum arquivo enviado (file ou file_url)." });
-  }
+  let filePath, ext, newFilename;
 
   try {
-    // Salva no banco job inicial
-    const { error } = await supabase.from("job_metrics").insert({
-      job_id: jobId,
-      client_id: client.id,
-      status: "pending_upload",
-      file_type: null,
-      uploaded: false,
-      created_at: new Date().toISOString(),
-    });
+    if (req.file) {
+      // Upload via FormData
+      ext = path.extname(req.file.originalname).slice(1).toLowerCase();
+      if (!["pdf", "jpg", "jpeg", "png"].includes(ext)) {
+        return res.status(400).json({ detail: "Formato de arquivo inválido." });
+      }
 
-    if (error) throw error;
+      newFilename = `${uuidv4()}.${ext}`;
+      filePath = path.join("uploads", newFilename);
+      fs.renameSync(req.file.path, filePath);
+    } else if (req.body.file_url) {
+      // Upload via URL
+      const url = req.body.file_url;
+      const response = await axios.get(url, { responseType: "stream" });
 
-    const payload = {
+      // Detect extension
+      const contentType = response.headers["content-type"];
+      if (!contentType) throw new Error("Content-Type não encontrado.");
+
+      ext = contentType.split("/")[1].toLowerCase();
+      if (!["pdf", "jpg", "jpeg", "png"].includes(ext)) {
+        return res.status(400).json({ detail: "Formato de arquivo inválido." });
+      }
+
+      newFilename = `${uuidv4()}.${ext}`;
+      filePath = path.join("uploads", newFilename);
+
+      const writer = fs.createWriteStream(filePath);
+      await new Promise((resolve, reject) => {
+        response.data.pipe(writer);
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
+    } else {
+      return res.status(400).json({ detail: "Nenhum arquivo enviado." });
+    }
+
+    const jobId = uuidv4();
+
+    await processJobQueue.add("process_job", {
+      filepath: filePath,
+      ext,
+      filename: newFilename,
       jobId,
       clientId: client.id,
-      fileFromForm: fileFromForm
-        ? {
-            path: fileFromForm.path,
-            originalname: fileFromForm.originalname,
-          }
-        : null,
-      fileFromUrl: fileFromUrl || null,
-    };
-
-    // Enfileira job para Upload Local
-    await processJobQueue.add("upload_local", payload);
-
-    return res.status(200).json({
-      job_id: jobId,
-      status: "em processamento",
+      openaiKey: client.openai_key
     });
 
+    res.json({ job_id: jobId, status: "em processamento" });
+
   } catch (err) {
-    console.error("❌ Erro no upload:", err);
-    return res.status(500).json({ detail: "Erro ao criar job de upload." });
+    console.error("Erro no upload:", err);
+    return res.status(500).json({ detail: "Erro ao processar o upload." });
   }
 });
 
 module.exports = router;
-
