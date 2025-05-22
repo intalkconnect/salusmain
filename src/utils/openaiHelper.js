@@ -1,7 +1,7 @@
 // src/utils/openaiHelper.js
 const fs = require("fs").promises;
 const path = require("path");
-const OpenAI = require("openai");   // ➡️ import correto em CJS
+const OpenAI = require("openai");
 
 /**
  * Cria um client OpenAI com a sua API key
@@ -19,11 +19,13 @@ async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   const ext = path.extname(filePath).substring(1) || "png";
   const dataUrl = `data:image/${ext};base64,${buffer.toString("base64")}`;
 
+  // Mensagens com content blocks: texto e imagem
   const messages = [
     {
       role: "system",
       content: 
-        "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed)."
+        "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed). " +
+        "Responda apenas com um JSON válido sem formatação extra, sem backticks."
     },
     {
       role: "user",
@@ -31,7 +33,7 @@ async function callOpenAIWithVision(filePath, openaiKey, jobId) {
         {
           type: "text",
           text: 
-            "Por favor, extraia todo o texto desta imagem e retorne apenas um JSON com chaves 'text' e 'isHandwritten'."
+            "Extraia todo o texto desta imagem e retorne um JSON com chaves 'text' e 'isHandwritten'."
         },
         {
           type: "image_url",
@@ -42,11 +44,20 @@ async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   ];
 
   const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",      // ou outro GPT com visão
+    model: "gpt-4o-mini",
     messages
   });
 
-  return JSON.parse(resp.choices[0].message.content);
+  let raw = resp.choices[0].message.content.trim();
+  // Remove code fences caso existam
+  raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Não foi possível parsear JSON da resposta do OpenAI Vision: ${err.message}\nResposta: ${raw}`
+    );
+  }
 }
 
 /**
@@ -54,19 +65,27 @@ async function callOpenAIWithVision(filePath, openaiKey, jobId) {
  */
 async function callOpenAIWithText(text, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
+  const systemPrompt =
+    "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto médico. " +
+    "Responda apenas com um JSON válido sem formatação extra, sem backticks.";
+
   const resp = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
-      {
-        role: "system",
-        content:
-          "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto médico."
-      },
+      { role: "system", content: systemPrompt },
       { role: "user", content: text }
     ]
   });
 
-  return JSON.parse(resp.choices[0].message.content);
+  let raw = resp.choices[0].message.content.trim();
+  raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Não foi possível parsear JSON da resposta do OpenAI Text: ${err.message}\nResposta: ${raw}`
+    );
+  }
 }
 
 module.exports = {
