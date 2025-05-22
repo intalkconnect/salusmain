@@ -38,7 +38,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   const clienteId = req.params.id;
 
   const { error } = await supabase
-    .from("clientes")
+    .from("salus.clientes")
     .delete()
     .eq("id", clienteId);
 
@@ -73,7 +73,7 @@ router.get("/", authMiddleware, async (req, res) => {
     return res.status(403).json({ detail: "Apenas global API key pode listar clientes" });
   }
 
-  const { data: clientes, error } = await supabase.from("clientes").select("*");
+  const { data: clientes, error } = await supabase.from("salus.clientes").select("*");
 
   if (error) {
     return res.status(500).json({ detail: "Erro ao buscar clientes", error });
@@ -97,7 +97,7 @@ router.get("/", authMiddleware, async (req, res) => {
 // Função auxiliar para contar jobs
 async function countJobs(clientId, start, end = null) {
   let query = supabase
-    .from("recipe_lines")
+    .from("salus.recipe_lines")
     .select("job_id")
     .eq("client_id", clientId)
     .gte("created_at", start);
@@ -162,7 +162,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
   // Verificar duplicidade de api_key
   const { data: existing, error: existingError } = await supabase
-    .from("clientes")
+    .from("salus.clientes")
     .select("id")
     .eq("api_key", api_key)
     .maybeSingle();
@@ -176,7 +176,7 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 
   // Inserir novo cliente
-  const { data, error } = await supabase.from("clientes").insert([
+  const { data, error } = await supabase.from("salus.clientes").insert([
     {
       id: uuidv4(),
       nome,
@@ -247,7 +247,7 @@ router.patch("/:id", authMiddleware, async (req, res) => {
   const update = req.body;
 
   const { error: updateError } = await supabase
-    .from("clientes")
+    .from("salus.clientes")
     .update(update)
     .eq("id", clienteId);
 
@@ -256,7 +256,7 @@ router.patch("/:id", authMiddleware, async (req, res) => {
   }
 
   const { data: cliente, error } = await supabase
-    .from("clientes")
+    .from("salus.clientes")
     .select("*")
     .eq("id", clienteId)
     .single();
@@ -286,7 +286,7 @@ router.get("/metrics", authMiddleware, async (req, res) => {
   }
 
   const { data: rows, error } = await supabase
-    .from("job_metrics")
+    .from("salus.job_metrics")
     .select("*")
     .order("created_at", { ascending: false });
 
