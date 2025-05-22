@@ -1,10 +1,10 @@
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const { supabase } = require("../utils/supabaseClient");
-const { normalizeText, limparTituloMedico } = require("../utils/textParser");
-const { callOpenAIWithVision, callOpenAIWithText } = require("../utils/openaiHelper");
-const { extractTextFromPDF, isManuscriptImage } = require("../utils/fileUtils");
-const { log, error } = require("../utils/logger");
+const { supabase } = require("../src/utils/supabaseClient");
+const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
+const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
+const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
+const { log, error } = require("../src/utils/logger");
 const fs = require("fs");
 const path = require("path");
 
