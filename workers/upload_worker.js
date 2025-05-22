@@ -1,17 +1,24 @@
-// src/workers/uploadWorker.js
 require("dotenv").config();
-const fs = require("fs");
+const fs = require("fs").promises;
 const path = require("path");
-const { supabase } = require("../src/utils/supabaseClient");
-const { log, error } = require("../src/utils/logger");
+const { supabase } = require("../utils/supabaseClient");
+const { log, error } = require("../utils/logger");
 const cron = require("node-cron");
 
+// Configurações
+const UPLOADS_FOLDER = path.resolve("uploads");
+const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET;
+
+if (!SUPABASE_BUCKET) {
+  throw new Error("❌ SUPABASE_BUCKET não definido no .env");
+}
+
 async function processUploads() {
-  log("🚀 Buscando arquivos para upload...");
+  log("🚀 Buscando arquivos para upload no bucket...");
 
   const { data: jobs, error: fetchError } = await supabase
     .from("job_metrics")
-    .select("job_id, file_type, client_id")
+    .select("job_id, file_type")
     .eq("status", "sucesso")
     .eq("uploaded", false);
 
@@ -27,19 +34,22 @@ async function processUploads() {
 
   for (const job of jobs) {
     const { job_id, file_type } = job;
-    const filename = `${job_id}.${file_type}`;
-    const filePath = path.join("uploads", filename);
+    const ext = file_type.toLowerCase();
+    const filename = `${job_id}.${ext}`;
+    const filePath = path.join(UPLOADS_FOLDER, filename);
 
-    if (!fs.existsSync(filePath)) {
+    try {
+      await fs.access(filePath);
+    } catch {
       error(`❌ Arquivo não encontrado: ${filePath}`);
       continue;
     }
 
     try {
-      const fileBuffer = fs.readFileSync(filePath);
+      const fileBuffer = await fs.readFile(filePath);
 
-      const { data, error: uploadError } = await supabase.storage
-        .from(process.env.SUPABASE_BUCKET)
+      const { error: uploadError } = await supabase.storage
+        .from(SUPABASE_BUCKET)
         .upload(`uploads/${filename}`, fileBuffer, {
           cacheControl: "3600",
           upsert: true,
@@ -52,7 +62,6 @@ async function processUploads() {
 
       log(`✅ Arquivo ${filename} enviado para o bucket.`);
 
-      // Atualiza flag uploaded no banco
       const { error: updateError } = await supabase
         .from("job_metrics")
         .update({ uploaded: true })
@@ -60,11 +69,12 @@ async function processUploads() {
 
       if (updateError) {
         error("❌ Erro ao atualizar flag uploaded:", updateError);
-      } else {
-        // Deleta o arquivo local após upload bem-sucedido
-        fs.unlinkSync(filePath);
-        log(`🗑️ Arquivo local ${filename} deletado.`);
+        continue;
       }
+
+      await fs.unlink(filePath);
+      log(`🗑️ Arquivo local ${filename} deletado.`);
+
     } catch (err) {
       error(`❌ Erro ao processar upload do arquivo ${filename}:`, err);
     }
