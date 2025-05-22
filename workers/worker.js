@@ -8,7 +8,7 @@ const { log, error } = require("../src/utils/logger");
 const path = require("path");
 const fs = require("fs");
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const connection = {
   connection: {
