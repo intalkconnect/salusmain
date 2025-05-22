@@ -1,6 +1,5 @@
 require("dotenv").config();
 const { Queue } = require("bullmq");
-const path = require("path");
 
 const connection = {
   connection: {
