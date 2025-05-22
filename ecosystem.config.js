@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'api',
       script: 'index.js',
-      instances: 1,
+      instances: '1',
       exec_mode: 'fork',
     },
     {
@@ -21,7 +21,7 @@ module.exports = {
     {
       name: 'worker-upload-bucket',
       script: 'workers/uploadBucketWorker.js',
-      instances: 1,
+      instances: '1',
       exec_mode: 'fork',
     },
   ],
