@@ -18,7 +18,7 @@ async function authMiddleware(req, res, next) {
     console.log("🔍 Token decodificado:", decoded);
 
     const { data: client, error } = await supabase
-      .from("clientes")
+      .from("salus.clientes")
       .select("*")
       .eq("id", decoded.client_id) // ou 'client_id', depende do que está no token
       .single();
