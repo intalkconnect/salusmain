@@ -4,7 +4,7 @@ const { Worker } = require("bullmq");
 const { supabase } = require("../src/utils/supabaseClient");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
-const { isManuscriptImage, extractTextFromPDF } = require("../src/utils/fileUtils");
+const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
 const { log, error } = require("../src/utils/logger");
 const path = require("path");
 
@@ -23,6 +23,7 @@ const worker = new Worker(
     try {
       log(`📥 Processando job ${jobId}`);
 
+      // Registra job como em processamento
       await logJobMetric(
         clientId,
         jobId,
@@ -37,7 +38,7 @@ const worker = new Worker(
       let result;
 
       if ([".jpg", ".jpeg", ".png"].includes(extClean)) {
-        const isManuscript = await isManuscriptImage(filepath, openaiKey, jobId);
+        const isManuscript = await isManuscriptImage(filepath);
         if (isManuscript) {
           await logJobMetric(
             clientId,
@@ -56,7 +57,7 @@ const worker = new Worker(
         result = await callOpenAIWithVision(filepath, openaiKey, jobId);
       } else if (extClean === ".pdf") {
         log("📄 Extraindo texto de PDF...");
-        const { text } = await extractTextFromPDF(filepath, openaiKey, jobId);
+        const { text } = await extractTextFromPDF(filepath);
         if (!text || text.trim().length < 30) {
           await logJobMetric(
             clientId,
@@ -76,13 +77,13 @@ const worker = new Worker(
         throw new Error("Formato de arquivo não suportado.");
       }
 
-      if (result.status === "human" || !result.medications) {
+      if (result.status === "human") {
         await logJobMetric(
           clientId,
           jobId,
           ext,
           "human",
-          "manuscrito ou ilegível ou dados insuficientes",
+          "manuscrito ou ilegível",
           startedAt,
           new Date()
         );
@@ -90,7 +91,7 @@ const worker = new Worker(
         return;
       }
 
-      log("✅ Resultado da IA recebido", JSON.stringify(result, null, 2));
+      log("✅ Resultado da IA recebido");
 
       const patient = normalizeText(result.patient || "");
       const doctor = limparTituloMedico(result.doctor || "");
@@ -105,20 +106,15 @@ const worker = new Worker(
           quantity,
         } = details;
 
-        if (!Array.isArray(raw_materials) || raw_materials.length === 0) {
-          log(`⚠️ Formula ${formulaName} não possui matérias-primas. Pulando.`);
-          continue;
-        }
-
         for (const mp of raw_materials) {
           const activeRaw = normalizeText(mp.active || "");
           const dose = parseFloat(mp.dose) || null;
           const unity = mp.unity;
 
-          const { error: insertError } = await supabase.from("recipe_lines").insert({
+          await supabase.from("recipe_lines").insert({
             filename,
             job_id: jobId,
-            text_block: `${formulaName} - ${activeRaw} ${dose || ""}${unity || ""} ${form}`,
+            text_block: `${formulaName} - ${activeRaw} ${dose}${unity} ${form}`,
             classification: "formula",
             active: activeRaw,
             dose,
@@ -134,10 +130,6 @@ const worker = new Worker(
             reviewed: false,
             created_at: new Date().toISOString(),
           });
-
-          if (insertError) {
-            error(`❌ Erro ao inserir recipe_line (job ${jobId}):`, insertError);
-          }
         }
       }
 
@@ -188,14 +180,11 @@ async function logJobMetric(
   }
 
   if (existing) {
-    const { error: updateError } = await supabase
-      .from("job_metrics")
-      .update({
-        status,
-        error_type: errorType,
-        ended_at: endedAt,
-      })
-      .eq("job_id", jobId);
+    const { error: updateError } = await supabase.from("job_metrics").update({
+      status,
+      error_type: errorType,
+      ended_at: endedAt,
+    }).eq("job_id", jobId);
 
     if (updateError) {
       error("❌ Erro ao atualizar job_metrics:", updateError);
