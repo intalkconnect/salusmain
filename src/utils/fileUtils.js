@@ -1,126 +1,170 @@
 require('dotenv').config();
-const vision = require("@google-cloud/vision");
-const fs = require("fs").promises;
-const mime = require("mime-types");
+const fs = require('fs');
+const path = require('path');
+const pdf = require('pdf-parse');
+const { OpenAI } = require('openai');
+const { PdfConverter } = require('pdf-poppler');
 
-const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON);
-
-const client = new vision.ImageAnnotatorClient({
-  credentials: {
-    client_email: credentials.client_email,
-    private_key: credentials.private_key,
-  },
-  projectId: credentials.project_id,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
- * Calcula a área de um bounding box do Google Vision.
+ * Verifica se um PDF tem texto embutido (digitado) ou é escaneado (imagem).
+ * Se tiver pouco texto (<30 caracteres), assume que é escaneado.
  */
-function calculateBoundingBoxArea(boundingBox) {
-  if (!boundingBox || !boundingBox.vertices) return 0;
+async function isPdfScanned(filePath) {
+  const dataBuffer = await fs.promises.readFile(filePath);
+  const data = await pdf(dataBuffer);
 
-  const xValues = boundingBox.vertices.map(v => v.x || 0);
-  const yValues = boundingBox.vertices.map(v => v.y || 0);
+  const texto = (data.text || "").trim();
+  console.log(`🔍 Texto detectado no PDF: ${texto.length} caracteres`);
 
-  const width = Math.max(...xValues) - Math.min(...xValues);
-  const height = Math.max(...yValues) - Math.min(...yValues);
-
-  return width * height;
+  return texto.length < 30; // Ajuste se necessário
 }
 
 /**
- * Verifica se uma imagem é manuscrita com base nos blocos de texto detectados.
+ * Converte um PDF escaneado em uma ou mais imagens (uma por página).
+ * Retorna um array de paths para as imagens geradas.
  */
-async function isManuscriptImage(filePath) {
-  try {
-    console.log(`🟢 Iniciando análise de manuscrito para: ${filePath}`);
+async function convertPdfToImages(pdfPath) {
+  const outputDir = path.dirname(pdfPath);
+  const opts = {
+    format: 'jpeg',
+    out_dir: outputDir,
+    out_prefix: path.basename(pdfPath, path.extname(pdfPath)),
+    page: null, // null = todas as páginas
+  };
 
-    const [result] = await client.documentTextDetection(filePath);
-    const annotation = result.fullTextAnnotation;
-    const pages = annotation?.pages || [];
+  const converter = new PdfConverter(pdfPath);
+  const result = await converter.convert(opts);
 
-    let totalBlocks = 0;
-    let lowConfidenceBlocks = 0;
-    let ignoredSmallBlocks = 0;
+  console.log(`🖼️ PDF convertido em imagens:`, result);
+  return result;
+}
 
-    for (const page of pages) {
-      for (const block of page.blocks || []) {
-        const area = calculateBoundingBoxArea(block.boundingBox);
-        const confidence = block.confidence ?? 1;
+/**
+ * Processa um PDF com texto embutido, extraindo o texto e interpretando com OpenAI (GPT).
+ */
+async function processPdfWithOpenAI(filePath) {
+  const dataBuffer = await fs.promises.readFile(filePath);
+  const data = await pdf(dataBuffer);
+  const texto = (data.text || "").trim();
 
-        console.log(`📦 Block -> Area: ${area}, Confidence: ${confidence}`);
+  if (!texto) {
+    throw new Error("Nenhum texto detectado no PDF.");
+  }
 
-        if (area < 10000) {
-          ignoredSmallBlocks++;
-          console.log("🚫 Block ignorado (pequeno)");
-          continue;
-        }
+  const prompt = getOpenAIPrompt();
 
-        totalBlocks++;
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o", // ou gpt-4-turbo
+    messages: [{ role: "user", content: `${prompt}\n\n${texto}` }],
+    max_tokens: 4000,
+  });
 
-        if (confidence < 0.7) {
-          lowConfidenceBlocks++;
-          console.log("⚠️ Block marcado como baixa confiança");
-        }
+  const content = response.choices[0].message.content;
+  console.log("📜 Resposta OpenAI (PDF texto):", content);
+
+  return parseOpenAIResponse(content);
+}
+
+/**
+ * Processa uma imagem (ou PDF convertido em imagem) com OpenAI Vision.
+ */
+async function processImageWithOpenAI(filepath) {
+  const fileData = await fs.promises.readFile(filepath);
+  const base64 = fileData.toString('base64');
+
+  const prompt = getOpenAIPrompt();
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o", // ou gpt-4-turbo
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: `data:image/jpeg;base64,${base64}` }
+        ]
       }
-    }
+    ],
+    max_tokens: 4000,
+  });
 
-    const ratioLowConfidence = totalBlocks > 0 ? lowConfidenceBlocks / totalBlocks : 0;
-    const isLikelyHandwritten = ratioLowConfidence > 0.5;
+  const content = response.choices[0].message.content;
+  console.log("🖼️ Resposta OpenAI (Imagem):", content);
 
-    console.log("===== 📊 Resultado da Análise =====");
-    console.log(`Total de blocos válidos: ${totalBlocks}`);
-    console.log(`Blocos ignorados (pequenos): ${ignoredSmallBlocks}`);
-    console.log(`Blocos baixa confiança: ${lowConfidenceBlocks}`);
-    console.log(`Ratio baixa confiança: ${(ratioLowConfidence * 100).toFixed(2)}%`);
-    console.log(`Classificação final: ${isLikelyHandwritten ? "🖋️ Manuscrito" : "📄 Digitado"}`);
-    console.log("===================================");
-
-    return {
-      isHandwritten: isLikelyHandwritten,
-      ratioLowConfidence,
-      totalBlocks,
-      lowConfidenceBlocks,
-      ignoredSmallBlocks,
-    };
-  } catch (err) {
-    console.error("❌ Erro ao detectar manuscrito:", err.message);
-    return { isHandwritten: false, ratioLowConfidence: 0, totalBlocks: 0 };
-  }
+  return parseOpenAIResponse(content);
 }
 
 /**
- * Extrai texto de um PDF usando Google Vision API.
+ * Prompt padronizado para extrair informações e classificar manuscrito/digitado.
  */
-async function extractTextFromPDF(filePath) {
-  try {
-    const inputConfig = {
-      mimeType: mime.lookup(filePath) || "application/pdf",
-      content: (await fs.readFile(filePath)).toString("base64"),
-    };
+function getOpenAIPrompt() {
+  return `
+Você está analisando um documento médico. Execute os seguintes passos:
 
-    const request = {
-      requests: [{
-        inputConfig,
-        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-      }],
-    };
+1. Verifique se o documento é manuscrito (escrito à mão) ou digitado (impresso ou digital).
+   - Se for manuscrito ou estiver ilegível, responda:
+     CLASSIFICACAO: manuscrito
+   - Se for digitado, responda:
+     CLASSIFICACAO: digitado
 
-    const [response] = await client.batchAnnotateFiles(request);
-    const responses = response.responses?.[0]?.responses || [];
+2. Se for digitado, extraia as seguintes informações:
+   - Nome do paciente
+   - Nome do médico
+   - Fórmulas, ativos, dosagens, unidades, forma farmacêutica, posologia, quantidade
 
-    const text = responses.map(r => r.fullTextAnnotation?.text || "").join("\n");
+Formato da resposta:
+CLASSIFICACAO: [manuscrito|digitado]
 
-    console.log(`📝 Texto extraído do PDF: ${text.length} caracteres`);
-
-    return { text };
-  } catch (err) {
-    console.error("❌ Erro ao extrair texto do PDF via Vision:", err.message);
-    return { text: "" };
+Se for digitado:
+{
+  "patient": "Nome do paciente",
+  "doctor": "Nome do médico",
+  "medications": {
+    "nome_da_formula": {
+      "raw_materials": [
+        { "active": "nome do ativo", "dose": X, "unity": "mg" }
+      ],
+      "form": "",
+      "type": "",
+      "posology": "",
+      "quantity": ""
+    }
   }
+}
+`.trim();
+}
+
+/**
+ * Faz o parser da resposta textual da OpenAI e extrai dados estruturados.
+ */
+function parseOpenAIResponse(content) {
+  const classificacaoMatch = /CLASSIFICACAO:\s*(manuscrito|digitado)/i.exec(content);
+  const classificacao = classificacaoMatch?.[1]?.toLowerCase() || "indefinido";
+
+  let jsonData = {};
+  try {
+    const jsonStart = content.indexOf('{');
+    const jsonEnd = content.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      const jsonString = content.substring(jsonStart, jsonEnd + 1);
+      jsonData = JSON.parse(jsonString);
+    }
+  } catch (err) {
+    console.warn("⚠️ Erro ao fazer parse do JSON da OpenAI:", err);
+  }
+
+  return {
+    classificacao,
+    ...jsonData,
+    rawResponse: content,
+  };
 }
 
 module.exports = {
-  isManuscriptImage,
-  extractTextFromPDF,
+  isPdfScanned,
+  convertPdfToImages,
+  processPdfWithOpenAI,
+  processImageWithOpenAI,
 };
