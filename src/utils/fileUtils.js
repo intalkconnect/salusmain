@@ -28,6 +28,9 @@ function calculateBoundingBoxArea(boundingBox) {
   return width * height;
 }
 
+/**
+ * Verifica se uma imagem é manuscrita com base nos blocos de texto detectados.
+ */
 async function isManuscriptImage(filePath) {
   try {
     console.log(`🟢 Iniciando análise de manuscrito para: ${filePath}`);
@@ -85,3 +88,39 @@ async function isManuscriptImage(filePath) {
     return { isHandwritten: false, ratioLowConfidence: 0, totalBlocks: 0 };
   }
 }
+
+/**
+ * Extrai texto de um PDF usando Google Vision API.
+ */
+async function extractTextFromPDF(filePath) {
+  try {
+    const inputConfig = {
+      mimeType: mime.lookup(filePath) || "application/pdf",
+      content: (await fs.readFile(filePath)).toString("base64"),
+    };
+
+    const request = {
+      requests: [{
+        inputConfig,
+        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+      }],
+    };
+
+    const [response] = await client.batchAnnotateFiles(request);
+    const responses = response.responses?.[0]?.responses || [];
+
+    const text = responses.map(r => r.fullTextAnnotation?.text || "").join("\n");
+
+    console.log(`📝 Texto extraído do PDF: ${text.length} caracteres`);
+
+    return { text };
+  } catch (err) {
+    console.error("❌ Erro ao extrair texto do PDF via Vision:", err.message);
+    return { text: "" };
+  }
+}
+
+module.exports = {
+  isManuscriptImage,
+  extractTextFromPDF,
+};
