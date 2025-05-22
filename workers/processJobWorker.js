@@ -1,4 +1,3 @@
-// src/workers/worker.js
 require("dotenv").config();
 const { Worker } = require("bullmq");
 const { supabase } = require("../src/utils/supabaseClient");
@@ -6,6 +5,7 @@ const { normalizeText, limparTituloMedico } = require("../src/utils/textParser")
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
 const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
 const { log, error } = require("../src/utils/logger");
+const fs = require("fs");
 const path = require("path");
 
 const connection = {
@@ -22,6 +22,38 @@ const worker = new Worker(
 
     try {
       log(`📥 Processando job ${jobId}`);
+
+      // 🔥 Validação obrigatória
+      if (!filepath) {
+        const msg = `❌ Filepath ausente no job ${jobId}`;
+        error(msg);
+        await logJobMetric(
+          clientId,
+          jobId,
+          ext || null,
+          "falha",
+          "filepath ausente",
+          startedAt,
+          new Date()
+        );
+        return;
+      }
+
+      // 🔥 Verifica se o arquivo realmente existe
+      if (!fs.existsSync(filepath)) {
+        const msg = `❌ Arquivo não encontrado em ${filepath} para job ${jobId}`;
+        error(msg);
+        await logJobMetric(
+          clientId,
+          jobId,
+          ext || null,
+          "falha",
+          "arquivo não encontrado",
+          startedAt,
+          new Date()
+        );
+        return;
+      }
 
       // Registra job como em processamento
       await logJobMetric(
@@ -180,26 +212,31 @@ async function logJobMetric(
   }
 
   if (existing) {
-    const { error: updateError } = await supabase.from("job_metrics").update({
-      status,
-      error_type: errorType,
-      ended_at: endedAt,
-    }).eq("job_id", jobId);
+    const { error: updateError } = await supabase
+      .from("job_metrics")
+      .update({
+        status,
+        error_type: errorType,
+        ended_at: endedAt,
+      })
+      .eq("job_id", jobId);
 
     if (updateError) {
       error("❌ Erro ao atualizar job_metrics:", updateError);
     }
   } else {
-    const { error: insertError } = await supabase.from("job_metrics").insert({
-      client_id: clientId,
-      job_id: jobId,
-      file_type: fileType,
-      status,
-      error_type: errorType,
-      started_at: startedAt,
-      ended_at: endedAt,
-      created_at: new Date().toISOString(),
-    });
+    const { error: insertError } = await supabase
+      .from("job_metrics")
+      .insert({
+        client_id: clientId,
+        job_id: jobId,
+        file_type: fileType,
+        status,
+        error_type: errorType,
+        started_at: startedAt,
+        ended_at: endedAt,
+        created_at: new Date().toISOString(),
+      });
 
     if (insertError) {
       error("❌ Erro ao inserir em job_metrics:", insertError);
