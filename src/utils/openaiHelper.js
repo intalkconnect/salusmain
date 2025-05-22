@@ -1,5 +1,5 @@
 // src/utils/openaiHelper.js
-const fs = require("fs").promises);
+const fs = require("fs").promises;
 const OpenAI = require("openai");   // ➡️  import correto em CJS
 
 /**
