@@ -74,12 +74,6 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
   const jobId = req.params.job_id;
   const client = req.client;
 
-  if (client.is_global) {
-    return res
-      .status(403)
-      .json({ detail: "Global API key não autorizada para estimate" });
-  }
-
   const { data: rows, error } = await supabase
     .from("recipe_lines")
     .select("*")
@@ -90,7 +84,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
   if (error) {
     return res
       .status(500)
-      .json({ detail: "Erro ao buscar dados do Supabase", error });
+      .json({ detail: "Erro ao buscar dados do bd", error });
   }
 
   if (!rows || rows.length === 0) {
@@ -138,7 +132,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
 
   res.json({
     job_id: jobId,
-    status: "concluído",
+    status: "concluido",
     patient,
     doctor,
     medications,
