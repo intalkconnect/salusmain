@@ -5,11 +5,12 @@ const path = require("path");
 const axios = require("axios");
 const { supabase } = require("../src/utils/supabaseClient");
 const { log, error } = require("../src/utils/logger");
+const { processJobQueue } = require("../src/jobs/processJob");
 
 // 🔥 Conexão Redis obrigatória
 const connection = {
   connection: {
-    url: process.env.REDIS_URL,  // ← Garanta que REDIS_URL está no seu .env
+    url: process.env.REDIS_URL,
   },
 };
 
@@ -52,6 +53,7 @@ const worker = new Worker(
         log(`🌐 Arquivo baixado para uploads/: ${filename}`);
       }
 
+      // Atualiza status no banco
       await supabase.from("job_metrics")
         .update({
           status: "processing",
@@ -60,7 +62,16 @@ const worker = new Worker(
         })
         .eq("job_id", jobId);
 
-      log(`✅ Upload local concluído para job ${jobId}`);
+      // 🔥 Enfileira para processamento
+      await processJobQueue.add('process_job', {
+        filepath: filePath,
+        ext,
+        filename,
+        jobId,
+        clientId,
+      });
+
+      log(`✅ Upload local concluído e job ${jobId} enfileirado para processamento`);
 
     } catch (err) {
       error(`❌ Erro no upload local do job ${jobId}:`, err);
@@ -72,5 +83,5 @@ const worker = new Worker(
         .eq("job_id", jobId);
     }
   },
-  connection // 🔥 ← ISSO É OBRIGATÓRIO
+  connection
 );
