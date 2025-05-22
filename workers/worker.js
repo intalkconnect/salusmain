@@ -21,73 +21,47 @@ const worker = new Worker(
     const { filepath, ext, filename, jobId, clientId, openaiKey } = job.data;
     const startedAt = new Date();
 
+    const tempFilePath = filepath;
+
     try {
       log(`📥 Processando job ${jobId}`);
 
-      // Registra job como em processamento
-      await logJobMetric(
-        clientId,
-        jobId,
-        ext,
-        "processing",
-        null,
-        startedAt,
-        null
-      );
+      // 🔍 Verifica se o arquivo existe
+      if (!fs.existsSync(tempFilePath)) {
+        throw new Error(`Arquivo não encontrado em ${tempFilePath}`);
+      }
 
-      const extClean = path.extname(filepath).toLowerCase();
+      await logJobMetric(clientId, jobId, ext, "processing", null, startedAt, null);
+
+      const extClean = ext || path.extname(tempFilePath).replace(".", "").toLowerCase();
       let result;
 
-      if ([".jpg", ".jpeg", ".png"].includes(extClean)) {
-        const isManuscript = await isManuscriptImage(filepath);
+      if (["jpg", "jpeg", "png"].includes(extClean)) {
+        const isManuscript = await isManuscriptImage(tempFilePath);
         if (isManuscript) {
-          await logJobMetric(
-            clientId,
-            jobId,
-            ext,
-            "human",
-            "manuscrito identificado",
-            startedAt,
-            new Date()
-          );
+          await logJobMetric(clientId, jobId, ext, "human", "manuscrito identificado", startedAt, new Date());
           log(`👤 Job ${jobId} marcado como HUMAN — manuscrito identificado`);
           return;
         }
 
         log("🧠 Enviando imagem para OpenAI Vision...");
-        result = await callOpenAIWithVision(filepath, openaiKey, jobId);
-      } else if (extClean === ".pdf") {
+        result = await callOpenAIWithVision(tempFilePath, openaiKey, jobId);
+      } else if (extClean === "pdf") {
         log("📄 Extraindo texto de PDF...");
-        const { text } = await extractTextFromPDF(filepath);
+        const { text } = await extractTextFromPDF(tempFilePath);
         if (!text || text.trim().length < 30) {
-          await logJobMetric(
-            clientId,
-            jobId,
-            ext,
-            "human",
-            "PDF com pouco texto ou ilegível",
-            startedAt,
-            new Date()
-          );
+          await logJobMetric(clientId, jobId, ext, "human", "PDF com pouco texto ou ilegível", startedAt, new Date());
           log(`👤 Job ${jobId} marcado como HUMAN — PDF ilegível`);
           return;
         }
         log("🧠 Enviando texto de PDF para OpenAI...");
         result = await callOpenAIWithText(text, openaiKey, jobId);
       } else {
-        throw new Error("Formato de arquivo não suportado.");
+        throw new Error(`Formato de arquivo não suportado: ${extClean}`);
       }
 
       if (result.status === "human") {
-        await logJobMetric(
-          clientId,
-          jobId,
-          ext,
-          "human",
-          "manuscrito ou ilegível",
-          startedAt,
-          new Date()
-        );
+        await logJobMetric(clientId, jobId, ext, "human", "manuscrito ou ilegível", startedAt, new Date());
         log(`👤 Job ${jobId} marcado como HUMAN — revisão manual necessária`);
         return;
       }
@@ -134,36 +108,27 @@ const worker = new Worker(
         }
       }
 
-      await logJobMetric(
-        clientId,
-        jobId,
-        ext,
-        "sucesso",
-        null,
-        startedAt,
-        new Date()
-      );
+      await logJobMetric(clientId, jobId, ext, "sucesso", null, startedAt, new Date());
       log(`✅ Job ${jobId} concluído com sucesso`);
     } catch (err) {
       error(`❌ Erro no job ${jobId}:`, err);
-      await logJobMetric(
-        clientId,
-        jobId,
-        ext,
-        "falha",
-        err.message?.slice(0, 200),
-        startedAt,
-        new Date()
-      );
-    }
-  } finally {
-      // 🔥 Faz upload para o bucket após processar
+      await logJobMetric(clientId, jobId, ext, "falha", err.message?.slice(0, 200), startedAt, new Date());
+    } finally {
+      // 🔥 Upload para bucket Supabase
       try {
         const fileData = fs.readFileSync(tempFilePath);
+        const mimeMap = {
+          pdf: "application/pdf",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+        };
+        const contentType = mimeMap[ext] || "application/octet-stream";
+
         const { error: uploadError } = await supabase.storage
           .from("uploads")
-          .upload(filename, fileData, {
-            contentType: ext === "pdf" ? "application/pdf" : `image/${ext}`,
+          .upload(`jobs/${jobId}/${filename}`, fileData, {
+            contentType,
             upsert: true,
           });
 
@@ -190,15 +155,8 @@ const worker = new Worker(
   connection
 );
 
-async function logJobMetric(
-  clientId,
-  jobId,
-  fileType,
-  status,
-  errorType = null,
-  startedAt = null,
-  endedAt = null
-) {
+// 🔧 Função de log no banco
+async function logJobMetric(clientId, jobId, fileType, status, errorType = null, startedAt = null, endedAt = null) {
   const { data: existing, error: fetchError } = await supabase
     .from("job_metrics")
     .select("id")
