@@ -2,8 +2,8 @@ const { Worker } = require("bullmq");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const { supabase } = require("../utils/supabaseClient");
-const { log, error } = require("../utils/logger");
+const { supabase } = require("../src/utils/supabaseClient");
+const { log, error } = require("../src/utils/logger");
 
 const worker = new Worker(
   "processJobQueue",
