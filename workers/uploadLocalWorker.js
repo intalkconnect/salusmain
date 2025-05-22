@@ -5,7 +5,7 @@ const path = require("path");
 const axios = require("axios");
 const { supabase } = require("../src/utils/supabaseClient");
 const { log, error } = require("../src/utils/logger");
-const { processJobQueue } = require("../src/jobs/processJob"); // 🔥 Importa a fila do processJob
+const { processJobQueue } = require("../src/jobs/processJob");
 
 const connection = {
   connection: {
@@ -60,7 +60,7 @@ const worker = new Worker(
         })
         .eq("job_id", jobId);
 
-      // 🔥 Enfileira para processamento
+      // 🔥 🔥 🔥 Aqui enfileira o job para processar
       await processJobQueue.add('process_job', {
         filepath: filePath,
         ext,
