@@ -5,6 +5,29 @@ const { authMiddleware } = require("./auth");
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /clientes/{id}:
+ *   delete:
+ *     summary: Exclui um cliente
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do cliente
+ *     responses:
+ *       204:
+ *         description: Cliente excluído com sucesso
+ *       403:
+ *         description: Acesso negado
+ *       500:
+ *         description: Erro interno
+ */
+
 // DELETE /clientes/:id
 router.delete("/:id", authMiddleware, async (req, res) => {
   const client = req.client;
@@ -25,6 +48,23 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 
   res.status(204).send();
 });
+
+/**
+ * @swagger
+ * /clientes:
+ *   get:
+ *     summary: Lista todos os clientes
+ *     security:
+ *       - bearerAuth: []
+ *     description: Somente acessível por API key global. Retorna todos os clientes e estatísticas de uso (últimos 30 dias, mês atual e mês anterior).
+ *     responses:
+ *       200:
+ *         description: Lista de clientes
+ *       403:
+ *         description: Acesso negado
+ *       500:
+ *         description: Erro ao buscar clientes
+ */
 
 // GET /clientes
 router.get("/", authMiddleware, async (req, res) => {
@@ -71,6 +111,40 @@ async function countJobs(clientId, start, end = null) {
 
   return new Set(data?.map((r) => r.job_id)).size;
 }
+
+/**
+ * @swagger
+ * /clientes:
+ *   post:
+ *     summary: Cria um novo cliente
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - openai_key
+ *               - api_key
+ *             properties:
+ *               nome:
+ *                 type: string
+ *               openai_key:
+ *                 type: string
+ *               api_key:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Cliente criado
+ *       400:
+ *         description: Dados inválidos ou API key já cadastrada
+ *       403:
+ *         description: Acesso negado
+ *       500:
+ *         description: Erro interno
+ */
 
 // POST /clientes
 router.post("/", authMiddleware, async (req, res) => {
@@ -123,6 +197,44 @@ router.post("/", authMiddleware, async (req, res) => {
 
   res.status(201).json({ ...data[0], uso: 0, uso_atual: 0, uso_anterior: 0 });
 });
+
+/**
+ * @swagger
+ * /clientes/{id}:
+ *   patch:
+ *     summary: Atualiza um cliente
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do cliente
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nome:
+ *                 type: string
+ *               openai_key:
+ *                 type: string
+ *               api_key:
+ *                 type: string
+ *               ativo:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Cliente atualizado
+ *       403:
+ *         description: Acesso negado
+ *       500:
+ *         description: Erro interno
+ */
 
 // PATCH /clientes/:id
 router.patch("/:id", authMiddleware, async (req, res) => {
