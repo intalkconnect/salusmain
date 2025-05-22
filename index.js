@@ -22,7 +22,12 @@ app.use("/auth/login", loginRoutes);
 app.use("/upload", uploadRoutes);
 app.use("/estimate", estimateRoutes);
 app.use("/clientes", clientesRoutes);
+// Docs pública
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(specs));
+
+app.get("/", (req, res) => {
+  res.send("API rodando...");
+});
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
