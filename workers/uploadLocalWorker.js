@@ -21,6 +21,9 @@ const worker = new Worker(
     const { jobId, clientId, fileFromForm, fileFromUrl } = job.data;
     const startedAt = new Date();
 
+    log(`🚀 [Job ${jobId}] Iniciando Upload Local`);
+    log(`📦 Payload recebido: ${JSON.stringify(job.data, null, 2)}`);
+
     try {
       let filename, filePath, ext;
 
@@ -29,18 +32,32 @@ const worker = new Worker(
         throw new Error(`❌ Nenhum arquivo ou URL enviado no job ${jobId}`);
       }
 
+      // 🔍 Verifica se a pasta uploads existe
+      const uploadsDir = path.join(__dirname, "..", "uploads");
+      if (!fs.existsSync(uploadsDir)) {
+        log(`📂 Pasta uploads não encontrada, criando em ${uploadsDir}`);
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      } else {
+        log(`📂 Pasta uploads encontrada em ${uploadsDir}`);
+      }
+
       if (fileFromForm) {
+        log(`📥 Arquivo recebido via Form: ${fileFromForm.originalname}`);
+        log(`📥 Path temporário recebido: ${fileFromForm.path}`);
+
         ext = path.extname(fileFromForm.originalname).slice(1).toLowerCase();
         if (!ext) throw new Error(`❌ Extensão inválida no arquivo no job ${jobId}`);
 
         filename = `${jobId}.${ext}`;
-        filePath = path.join("uploads", filename);
+        filePath = path.join(uploadsDir, filename);
 
+        log(`🔧 Movendo arquivo de ${fileFromForm.path} para ${filePath}`);
         fs.renameSync(fileFromForm.path, filePath);
         log(`📁 Arquivo movido para uploads/: ${filename}`);
       }
 
       if (fileFromUrl) {
+        log(`🌐 Fazendo download da URL: ${fileFromUrl}`);
         const response = await axios.get(fileFromUrl, { responseType: "stream" });
         const contentType = response.headers["content-type"];
 
@@ -53,8 +70,9 @@ const worker = new Worker(
         if (!ext) throw new Error(`❌ Extensão não reconhecida na URL no job ${jobId}`);
 
         filename = `${jobId}.${ext}`;
-        filePath = path.join("uploads", filename);
+        filePath = path.join(uploadsDir, filename);
 
+        log(`🔧 Salvando arquivo baixado em ${filePath}`);
         const writer = fs.createWriteStream(filePath);
         await new Promise((resolve, reject) => {
           response.data.pipe(writer);
@@ -62,11 +80,18 @@ const worker = new Worker(
           writer.on("error", reject);
         });
 
-        log(`🌐 Arquivo baixado para uploads/: ${filename}`);
+        log(`🌐 Arquivo baixado e salvo em uploads/: ${filename}`);
       }
 
       if (!filePath) {
         throw new Error(`❌ Filepath não gerado no job ${jobId}`);
+      }
+
+      // ✅ Confirmação final
+      if (fs.existsSync(filePath)) {
+        log(`✅ Arquivo confirmado no local: ${filePath}`);
+      } else {
+        throw new Error(`❌ Arquivo NÃO encontrado no local após mover/baixar: ${filePath}`);
       }
 
       await supabase.from("job_metrics")
@@ -86,7 +111,7 @@ const worker = new Worker(
         clientId,
       });
 
-      log(`✅ Upload local concluído e job ${jobId} enfileirado para processamento`);
+      log(`🚀 Upload local concluído e job ${jobId} enfileirado para processamento`);
 
     } catch (err) {
       error(`❌ Erro no upload local do job ${jobId}:`, err);
