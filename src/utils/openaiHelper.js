@@ -1,59 +1,10 @@
 // src/utils/openaiHelper.js
-const fs = require("fs").promises;
+const { OpenAI } = require("openai");
+const fs = require("fs");
 const path = require("path");
-const OpenAI = require("openai");
+const { log, error } = require("./logger");
 
-function makeOpenAI(apiKey) {
-  return new OpenAI({ apiKey });
-}
-
-async function callOpenAIWithVision(filePath, openaiKey, jobId) {
-  const client = makeOpenAI(openaiKey);
-  const buffer = await fs.readFile(filePath);
-  const ext = path.extname(filePath).substring(1) || "png";
-  const dataUrl = `data:image/${ext};base64,${buffer.toString("base64")}`;
-
-  const messages = [
-    {
-      role: "system",
-      content: "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed). Responda apenas com um JSON válido sem formatação extra, sem backticks. Caso não consiga interpretar ou a imagem seja ilegível, responda exatamente { \"status\": \"human\" }."
-    },
-    {
-      role: "user",
-      content: [
-        {
-          type: "text",
-          text: "Extraia todo o texto desta imagem e retorne um JSON com chaves 'text' e 'isHandwritten'."
-        },
-        {
-          type: "image_url",
-          image_url: { url: dataUrl }
-        }
-      ]
-    }
-  ];
-
-  const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages
-  });
-
-  let raw = resp.choices[0].message.content.trim();
-  raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed.status === "human") {
-      return { status: "human" };
-    }
-    return parsed;
-  } catch (err) {
-    throw new Error(`Não foi possível parsear JSON da resposta do OpenAI Vision: ${err.message}\nResposta: ${raw}`);
-  }
-}
-
-async function callOpenAIWithText(text, openaiKey, jobId) {
-  const client = makeOpenAI(openaiKey);
-  const systemPrompt = `
+const systemPrompt = `
 Você receberá o texto completo de uma receita magistral. Extraia com exatidão:
 
 - Nome do paciente
@@ -104,31 +55,100 @@ IMPORTANTE:
 Se o nome da fórmula não estiver claro, use "formula_0", "formula_1", etc., de forma incremental.
 
 Nunca inclua valores diferentes de número em "dose". Use apenas números como 5, 10.0 etc.
+Retorne APENAS um JSON neste formato:
 
-⚠️ Se não conseguir extrair as informações corretamente ou o texto estiver ilegível, retorne exatamente:
-{ "status": "human" }
+{
+  "patient": "Nome do paciente ou null",
+  "doctor": "Nome da médica(o) ou null",
+  "medications": {
+    "formula_0": {
+      "raw_materials": [
+        { "active": "Naltrexona", "dose": 5, "unity": "mg" },
+        { "active": "Topiramato", "dose": 10, "unity": "mg" }
+      ],
+      "form": "Cápsula",
+      "type": "",
+      "posology": "Tomar 1 cápsula 2x ao dia por 30 dias",
+      "quantity": 60
+    }
+  }
+}
 
 Use null quando não houver valor. Nenhum texto fora do JSON.
 `.trim();
 
-  const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: text }
-    ]
-  });
-
-  let raw = resp.choices[0].message.content.trim();
-  raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
+async function callOpenAIWithVision(filepath, key, jobId) {
   try {
-    const parsed = JSON.parse(raw);
-    if (parsed.status === "human") {
+    const ext = path.extname(filepath).toLowerCase();
+    const mime =
+      [".jpg", ".jpeg", ".png"].includes(ext) ? "image/jpeg" : "application/octet-stream";
+    const buffer = fs.readFileSync(filepath);
+    const base64 = buffer.toString("base64");
+
+    const openai = new OpenAI({ apiKey: key });
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      temperature: 0,
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extraia os dados da receita anexa:" },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mime};base64,${base64}`,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const content = response.choices[0].message.content;
+    const match = content.match(/\{[\s\S]*\}/);
+    const json = match ? JSON.parse(match[0]) : null;
+
+    if (!json || (!json.patient && !json.medications)) {
+      log(`👤 Resultado inválido para job ${jobId}`);
       return { status: "human" };
     }
-    return parsed;
+
+    return json;
   } catch (err) {
-    throw new Error(`Não foi possível parsear JSON da resposta do OpenAI Text: ${err.message}\nResposta: ${raw}`);
+    error("Erro Vision:", err);
+    return { status: "human" };
+  }
+}
+
+async function callOpenAIWithText(text, key, jobId) {
+  try {
+    const openai = new OpenAI({ apiKey: key });
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      temperature: 0,
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text },
+      ],
+    });
+
+    const content = response.choices[0].message.content;
+    const match = content.match(/\{[\s\S]*\}/);
+    const json = match ? JSON.parse(match[0]) : null;
+
+    if (!json || (!json.patient && !json.medications)) {
+      log(`👤 Resultado inválido para job ${jobId}`);
+      return { status: "human" };
+    }
+
+    return json;
+  } catch (err) {
+    error("Erro Text GPT:", err);
+    return { status: "human" };
   }
 }
 
