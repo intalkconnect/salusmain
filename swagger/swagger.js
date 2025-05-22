@@ -31,8 +31,6 @@ const publicOptions = {
 
 const specs = swaggerJsdoc(publicOptions);
 
-const devSpecs = swaggerJsdoc(devOptions);
-
 module.exports = {
   swaggerUi,
   specs
