@@ -48,7 +48,6 @@ const devOptions = {
     "./src/api/estimate.js",
     "./src/api/upload.js",
     "./src/api/clientes.js",  // 🔒 Privada
-    "./src/api/health.js",    // 🔒 Privada
   ],
 };
 
