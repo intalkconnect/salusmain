@@ -42,7 +42,7 @@ router.post("/", async (req, res) => {
   }
 
   const { data: client, error } = await supabase
-    .from("clientes")
+    .from("salus.clientes")
     .select("*")
     .eq("api_key", api_key)
     .single();
