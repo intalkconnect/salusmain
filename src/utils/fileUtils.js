@@ -2,9 +2,8 @@ require('dotenv').config();
 const vision = require("@google-cloud/vision");
 const fs = require("fs").promises;
 const mime = require("mime-types");
-const path = require("path");
 
-const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON); // variável com o conteúdo inteiro do JSON
+const credentials = JSON.parse(process.env.GOOGLE_VISION_JSON);
 
 const client = new vision.ImageAnnotatorClient({
   credentials: {
@@ -13,6 +12,21 @@ const client = new vision.ImageAnnotatorClient({
   },
   projectId: credentials.project_id,
 });
+
+/**
+ * Calcula a área de um bounding box do Google Vision.
+ */
+function calculateBoundingBoxArea(boundingBox) {
+  if (!boundingBox || !boundingBox.vertices) return 0;
+
+  const xValues = boundingBox.vertices.map(v => v.x || 0);
+  const yValues = boundingBox.vertices.map(v => v.y || 0);
+
+  const width = Math.max(...xValues) - Math.min(...xValues);
+  const height = Math.max(...yValues) - Math.min(...yValues);
+
+  return width * height;
+}
 
 async function isManuscriptImage(filePath) {
   try {
@@ -25,29 +39,34 @@ async function isManuscriptImage(filePath) {
 
     for (const page of pages) {
       for (const block of page.blocks || []) {
+        const area = calculateBoundingBoxArea(block.boundingBox);
+
+        // Ignorar blocos muito pequenos (ex.: assinaturas, selos, ruídos)
+        if (area < 10000) continue;
+
         totalBlocks++;
-        const blockConfidence = block.confidence || 1;
-        if (blockConfidence < 0.7) {
+        const confidence = block.confidence || 1;
+
+        if (confidence < 0.7) {
           lowConfidenceBlocks++;
         }
       }
     }
 
     const ratioLowConfidence = totalBlocks > 0 ? lowConfidenceBlocks / totalBlocks : 0;
-
-    const isLikelyHandwritten = ratioLowConfidence > 0.5; // Ajuste conforme teste
+    const isLikelyHandwritten = ratioLowConfidence > 0.5;
 
     return {
       isHandwritten: isLikelyHandwritten,
       ratioLowConfidence,
       totalBlocks,
+      lowConfidenceBlocks,
     };
   } catch (err) {
     console.error("Erro ao detectar manuscrito:", err.message);
     return { isHandwritten: false, ratioLowConfidence: 0, totalBlocks: 0 };
   }
 }
-
 
 async function extractTextFromPDF(filePath) {
   try {
@@ -60,7 +79,6 @@ async function extractTextFromPDF(filePath) {
       requests: [{
         inputConfig,
         features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-        // ❌ NÃO definimos `pages` para processar TODAS as páginas
       }],
     };
 
