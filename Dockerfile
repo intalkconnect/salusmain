@@ -2,11 +2,14 @@ FROM node:18-slim
 
 # 🏗️ Instala dependências do sistema para pdf-poppler e outras libs nativas
 RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+  poppler-utils \
+  python3 \
+  make \
+  g++ \
+  curl \
+  procps \
+  && rm -rf /var/lib/apt/lists/*
+
 
 # Instala o PM2 globalmente
 RUN npm install -g pm2
