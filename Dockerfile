@@ -1,19 +1,16 @@
-FROM node:18
+FROM node:18-slim
 
-# Cria o diretório da aplicação
+RUN npm install -g pm2
+
 WORKDIR /app
 
-# Copia arquivos de definição de dependências
 COPY package*.json ./
 
-# Instala tudo (produção ou desenvolvimento, conforme necessário)
-RUN npm install
+RUN npm install --production
 
-# Copia o restante dos arquivos
 COPY . .
 
-# Expõe a porta da API
 EXPOSE 3000
 
-# Comando padrão: iniciar servidor + worker
-CMD ["npm", "run", "start:all"]
+# Usa arquivo de configuração do PM2
+CMD ["pm2-runtime", "ecosystem.config.js"]
