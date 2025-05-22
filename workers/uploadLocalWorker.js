@@ -14,7 +14,7 @@ const connection = {
 };
 
 const worker = new Worker(
-  "processJobQueue",
+  "process_job",
   async (job) => {
     if (job.name !== "upload_local") return;
 
