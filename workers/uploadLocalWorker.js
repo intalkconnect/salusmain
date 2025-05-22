@@ -24,8 +24,15 @@ const worker = new Worker(
     try {
       let filename, filePath, ext;
 
+      // 🔥 Validação obrigatória
+      if (!fileFromForm && !fileFromUrl) {
+        throw new Error(`❌ Nenhum arquivo ou URL enviado no job ${jobId}`);
+      }
+
       if (fileFromForm) {
         ext = path.extname(fileFromForm.originalname).slice(1).toLowerCase();
+        if (!ext) throw new Error(`❌ Extensão inválida no arquivo no job ${jobId}`);
+
         filename = `${jobId}.${ext}`;
         filePath = path.join("uploads", filename);
 
@@ -37,8 +44,14 @@ const worker = new Worker(
         const response = await axios.get(fileFromUrl, { responseType: "stream" });
         const contentType = response.headers["content-type"];
 
+        if (!contentType) {
+          throw new Error(`❌ Content-Type não encontrado na URL do job ${jobId}`);
+        }
+
         ext = contentType.split("/")[1].toLowerCase();
         if (ext === "jpeg") ext = "jpg";
+        if (!ext) throw new Error(`❌ Extensão não reconhecida na URL no job ${jobId}`);
+
         filename = `${jobId}.${ext}`;
         filePath = path.join("uploads", filename);
 
@@ -52,6 +65,10 @@ const worker = new Worker(
         log(`🌐 Arquivo baixado para uploads/: ${filename}`);
       }
 
+      if (!filePath) {
+        throw new Error(`❌ Filepath não gerado no job ${jobId}`);
+      }
+
       await supabase.from("job_metrics")
         .update({
           status: "processing",
@@ -60,7 +77,7 @@ const worker = new Worker(
         })
         .eq("job_id", jobId);
 
-      // 🔥 🔥 🔥 Aqui enfileira o job para processar
+      // 🔥 Enfileira para processamento
       await processJobQueue.add('process_job', {
         filepath: filePath,
         ext,
