@@ -1,9 +1,17 @@
+require("dotenv").config();
 const { Worker } = require("bullmq");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 const { supabase } = require("../src/utils/supabaseClient");
 const { log, error } = require("../src/utils/logger");
+
+// 🔥 Conexão Redis obrigatória
+const connection = {
+  connection: {
+    url: process.env.REDIS_URL,  // ← Garanta que REDIS_URL está no seu .env
+  },
+};
 
 const worker = new Worker(
   "processJobQueue",
@@ -63,5 +71,6 @@ const worker = new Worker(
         })
         .eq("job_id", jobId);
     }
-  }
+  },
+  connection // 🔥 ← ISSO É OBRIGATÓRIO
 );
