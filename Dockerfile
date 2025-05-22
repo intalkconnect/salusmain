@@ -23,6 +23,9 @@ RUN npm install --production
 # Copia o restante dos arquivos da aplicação
 COPY . .
 
+# Cria as pastas uploads e temporárias
+RUN mkdir -p uploads uploads_tmp
+
 # Expondo a porta da API
 EXPOSE 3000
 
