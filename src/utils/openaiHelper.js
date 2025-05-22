@@ -3,37 +3,27 @@ const fs = require("fs").promises;
 const path = require("path");
 const OpenAI = require("openai");
 
-/**
- * Cria um client OpenAI com a sua API key
- */
 function makeOpenAI(apiKey) {
   return new OpenAI({ apiKey });
 }
 
-/**
- * Envia imagem para OCR + classificação manuscrito vs impresso
- */
 async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
   const buffer = await fs.readFile(filePath);
   const ext = path.extname(filePath).substring(1) || "png";
   const dataUrl = `data:image/${ext};base64,${buffer.toString("base64")}`;
 
-  // Mensagens com content blocks: texto e imagem
   const messages = [
     {
       role: "system",
-      content: 
-        "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed). " +
-        "Responda apenas com um JSON válido sem formatação extra, sem backticks."
+      content: "Você é um assistente que extrai texto de imagens e detecta se é manuscrito (handwritten) ou impresso (printed). Responda apenas com um JSON válido sem formatação extra, sem backticks. Caso não consiga interpretar ou a imagem seja ilegível, responda exatamente { \"status\": \"human\" }."
     },
     {
       role: "user",
       content: [
         {
           type: "text",
-          text: 
-            "Extraia todo o texto desta imagem e retorne um JSON com chaves 'text' e 'isHandwritten'."
+          text: "Extraia todo o texto desta imagem e retorne um JSON com chaves 'text' e 'isHandwritten'."
         },
         {
           type: "image_url",
@@ -51,17 +41,16 @@ async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   let raw = resp.choices[0].message.content.trim();
   raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed.status === "human") {
+      return { status: "human" };
+    }
+    return parsed;
   } catch (err) {
-    throw new Error(
-      `Não foi possível parsear JSON da resposta do OpenAI Vision: ${err.message}\nResposta: ${raw}`
-    );
+    throw new Error(`Não foi possível parsear JSON da resposta do OpenAI Vision: ${err.message}\nResposta: ${raw}`);
   }
 }
 
-/**
- * Envia texto para extração de paciente, médico e medicamentos
- */
 async function callOpenAIWithText(text, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
   const systemPrompt = `
@@ -115,24 +104,9 @@ IMPORTANTE:
 Se o nome da fórmula não estiver claro, use "formula_0", "formula_1", etc., de forma incremental.
 
 Nunca inclua valores diferentes de número em "dose". Use apenas números como 5, 10.0 etc.
-Retorne APENAS um JSON neste formato:
 
-{
-  "patient": "Nome do paciente ou null",
-  "doctor": "Nome da médica(o) ou null",
-  "medications": {
-    "formula_0": {
-      "raw_materials": [
-        { "active": "Naltrexona", "dose": 5, "unity": "mg" },
-        { "active": "Topiramato", "dose": 10, "unity": "mg" }
-      ],
-      "form": "Cápsula",
-      "type": "",
-      "posology": "Tomar 1 cápsula 2x ao dia por 30 dias",
-      "quantity": 60
-    }
-  }
-}
+⚠️ Se não conseguir extrair as informações corretamente ou o texto estiver ilegível, retorne exatamente:
+{ "status": "human" }
 
 Use null quando não houver valor. Nenhum texto fora do JSON.
 `.trim();
@@ -148,11 +122,13 @@ Use null quando não houver valor. Nenhum texto fora do JSON.
   let raw = resp.choices[0].message.content.trim();
   raw = raw.replace(/^```(?:json)?\s*/, "").replace(/```$/, "");
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed.status === "human") {
+      return { status: "human" };
+    }
+    return parsed;
   } catch (err) {
-    throw new Error(
-      `Não foi possível parsear JSON da resposta do OpenAI Text: ${err.message}\nResposta: ${raw}`
-    );
+    throw new Error(`Não foi possível parsear JSON da resposta do OpenAI Text: ${err.message}\nResposta: ${raw}`);
   }
 }
 
