@@ -1,53 +1,61 @@
 // src/utils/openaiHelper.js
-const fs = require("fs").promises;
-const { Configuration, OpenAIApi } = require("openai");
+const fs = require("fs").promises);
+const OpenAI = require("openai");   // ➡️  import correto em CJS
 
+/**
+ * Cria um client OpenAI com a sua API key
+ */
 function makeOpenAI(apiKey) {
-  const cfg = new Configuration({ apiKey });
-  return new OpenAIApi(cfg);
+  return new OpenAI({ apiKey });
 }
 
 /**
- * Envia uma imagem para OpenAI Vision para OCR e classificação de manuscrito.
- * @param {string} filePath 
- * @param {string} openaiKey 
- * @param {string} jobId 
+ * Envia imagem para OCR + classificação manuscrito vs impresso
  */
 async function callOpenAIWithVision(filePath, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
-  const img = await fs.readFile(filePath);
-  const b64 = img.toString("base64");
-  // Construímos uma prompt que pede OCR + detecção de manuscrito
-  const messages = [
-    { role: "system", content: "Você é um assistente que extrai texto e identifica se é manuscrito (handwritten) ou impresso (printed)." },
-    { role: "user", content: 
-      `ImageBase64:${b64}\n\n` +
-      "1) Retorne JSON com chave `text`: todo texto extraído.\n" +
-      "2) chave `isHandwritten`: true se o texto for manuscrito, false caso contrário."
-    }
-  ];
-  const resp = await client.createChatCompletion({
-    model: "gpt-4o-mini", // ou outro modelo vision-enabled
-    messages
+  const buffer = await fs.readFile(filePath);
+  const b64 = buffer.toString("base64");
+
+  // observe a nova forma de chamar o chat-completion
+  const resp = await client.chat.completions.create({
+    model: "gpt-4o-mini",      // ou outro GPT com visão
+    messages: [
+      {
+        role: "system",
+        content:
+          "Você é um assistente que faz OCR de imagens e classifica se o texto é manuscrito.",
+      },
+      {
+        role: "user",
+        content:
+          `data:image/png;base64,${b64}\n\n` +
+          "1) Retorne JSON { text: string, isHandwritten: boolean }",
+      },
+    ],
   });
-  const content = resp.data.choices[0].message.content;
-  return JSON.parse(content);
+
+  return JSON.parse(resp.choices[0].message.content);
 }
 
 /**
- * Envia texto bruto para o modelo de chat da OpenAI para extrair paciente, médico e medicamentos.
+ * Envia texto para extração de paciente, médico e medicamentos
  */
 async function callOpenAIWithText(text, openaiKey, jobId) {
   const client = makeOpenAI(openaiKey);
-  const messages = [
-    { role: "system", content: "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto de prescrição médica." },
-    { role: "user", content: text }
-  ];
-  const resp = await client.createChatCompletion({
+  const resp = await client.chat.completions.create({
     model: "gpt-4o-mini",
-    messages
+    messages: [
+      {
+        role: "system",
+        content:
+          "Você é um assistente que extrai paciente, médico e lista de medicamentos de um texto médico.",
+      },
+      { role: "user", content: text },
+    ],
   });
-  return JSON.parse(resp.data.choices[0].message.content);
+
+  return JSON.parse(resp.choices[0].message.content);
 }
 
 module.exports = {
