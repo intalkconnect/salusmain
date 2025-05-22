@@ -1,14 +1,13 @@
+// src/workers/worker.js
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const { createClient } = require("@supabase/supabase-js");
+const { supabase } = require("../src/utils/supabaseClient");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
 const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
 const { log, error } = require("../src/utils/logger");
 const path = require("path");
 const fs = require("fs");
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 const connection = {
   connection: {
@@ -22,37 +21,54 @@ const worker = new Worker(
     const { filepath, ext, filename, jobId, clientId, openaiKey } = job.data;
     const startedAt = new Date();
 
-    const tempFilePath = filepath;
-
     try {
       log(`📥 Processando job ${jobId}`);
 
-      // 🔍 Valida se o arquivo existe no tmp
-      if (!fs.existsSync(tempFilePath)) {
-        throw new Error(`Arquivo não encontrado em ${tempFilePath}`);
-      }
+      // Registra job como em processamento
+      await logJobMetric(
+        clientId,
+        jobId,
+        ext,
+        "processing",
+        null,
+        startedAt,
+        null
+      );
 
-      // 🔥 Registra como processamento iniciado
-      await logJobMetric(clientId, jobId, ext, "processing", null, startedAt, null);
-
-      const extClean = path.extname(tempFilePath).toLowerCase();
+      const extClean = path.extname(filepath).toLowerCase();
       let result;
 
       if ([".jpg", ".jpeg", ".png"].includes(extClean)) {
-        const isManuscript = await isManuscriptImage(tempFilePath);
+        const isManuscript = await isManuscriptImage(filepath);
         if (isManuscript) {
-          await logJobMetric(clientId, jobId, ext, "human", "manuscrito identificado", startedAt, new Date());
+          await logJobMetric(
+            clientId,
+            jobId,
+            ext,
+            "human",
+            "manuscrito identificado",
+            startedAt,
+            new Date()
+          );
           log(`👤 Job ${jobId} marcado como HUMAN — manuscrito identificado`);
           return;
         }
 
         log("🧠 Enviando imagem para OpenAI Vision...");
-        result = await callOpenAIWithVision(tempFilePath, openaiKey, jobId);
+        result = await callOpenAIWithVision(filepath, openaiKey, jobId);
       } else if (extClean === ".pdf") {
         log("📄 Extraindo texto de PDF...");
-        const { text } = await extractTextFromPDF(tempFilePath);
+        const { text } = await extractTextFromPDF(filepath);
         if (!text || text.trim().length < 30) {
-          await logJobMetric(clientId, jobId, ext, "human", "PDF com pouco texto ou ilegível", startedAt, new Date());
+          await logJobMetric(
+            clientId,
+            jobId,
+            ext,
+            "human",
+            "PDF com pouco texto ou ilegível",
+            startedAt,
+            new Date()
+          );
           log(`👤 Job ${jobId} marcado como HUMAN — PDF ilegível`);
           return;
         }
@@ -63,7 +79,15 @@ const worker = new Worker(
       }
 
       if (result.status === "human") {
-        await logJobMetric(clientId, jobId, ext, "human", "manuscrito ou ilegível", startedAt, new Date());
+        await logJobMetric(
+          clientId,
+          jobId,
+          ext,
+          "human",
+          "manuscrito ou ilegível",
+          startedAt,
+          new Date()
+        );
         log(`👤 Job ${jobId} marcado como HUMAN — revisão manual necessária`);
         return;
       }
@@ -110,12 +134,29 @@ const worker = new Worker(
         }
       }
 
-      await logJobMetric(clientId, jobId, ext, "sucesso", null, startedAt, new Date());
+      await logJobMetric(
+        clientId,
+        jobId,
+        ext,
+        "sucesso",
+        null,
+        startedAt,
+        new Date()
+      );
       log(`✅ Job ${jobId} concluído com sucesso`);
     } catch (err) {
       error(`❌ Erro no job ${jobId}:`, err);
-      await logJobMetric(clientId, jobId, ext, "falha", err.message?.slice(0, 200), startedAt, new Date());
-    } finally {
+      await logJobMetric(
+        clientId,
+        jobId,
+        ext,
+        "falha",
+        err.message?.slice(0, 200),
+        startedAt,
+        new Date()
+      );
+    }
+  } finally {
       // 🔥 Faz upload para o bucket após processar
       try {
         const fileData = fs.readFileSync(tempFilePath);
@@ -149,8 +190,15 @@ const worker = new Worker(
   connection
 );
 
-// 🔧 Função de log no banco
-async function logJobMetric(clientId, jobId, fileType, status, errorType = null, startedAt = null, endedAt = null) {
+async function logJobMetric(
+  clientId,
+  jobId,
+  fileType,
+  status,
+  errorType = null,
+  startedAt = null,
+  endedAt = null
+) {
   const { data: existing, error: fetchError } = await supabase
     .from("job_metrics")
     .select("id")
