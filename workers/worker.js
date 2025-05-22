@@ -89,7 +89,7 @@ const worker = new Worker(
           const dose = parseFloat(mp.dose) || null;
           const unity = mp.unity;
 
-          await supabase.from("recipe_lines").insert({
+          await supabase.from("salus.recipe_lines").insert({
             filename,
             job_id: jobId,
             text_block: `${formulaName} - ${activeRaw} ${dose}${unity} ${form}`,
@@ -157,7 +157,7 @@ const worker = new Worker(
 // 🔧 Função de log no banco
 async function logJobMetric(clientId, jobId, fileType, status, errorType = null, startedAt = null, endedAt = null) {
   const { data: existing, error: fetchError } = await supabase
-    .from("job_metrics")
+    .from("salus.job_metrics")
     .select("id")
     .eq("job_id", jobId)
     .maybeSingle();
@@ -168,7 +168,7 @@ async function logJobMetric(clientId, jobId, fileType, status, errorType = null,
   }
 
   if (existing) {
-    const { error: updateError } = await supabase.from("job_metrics").update({
+    const { error: updateError } = await supabase.from("salus.job_metrics").update({
       status,
       error_type: errorType,
       ended_at: endedAt,
@@ -178,7 +178,7 @@ async function logJobMetric(clientId, jobId, fileType, status, errorType = null,
       error("❌ Erro ao atualizar job_metrics:", updateError);
     }
   } else {
-    const { error: insertError } = await supabase.from("job_metrics").insert({
+    const { error: insertError } = await supabase.from("salus.job_metrics").insert({
       client_id: clientId,
       job_id: jobId,
       file_type: fileType,
