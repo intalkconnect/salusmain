@@ -20,20 +20,34 @@ async function isManuscriptImage(filePath) {
     const annotation = result.fullTextAnnotation;
     const pages = annotation?.pages || [];
 
-    const isLikelyHandwritten = pages.some(page =>
-      page.blocks?.some(block =>
-        block.paragraphs?.some(p =>
-          p.confidence !== undefined && p.confidence < 0.6
-        )
-      )
-    );
+    let totalBlocks = 0;
+    let lowConfidenceBlocks = 0;
 
-    return isLikelyHandwritten;
+    for (const page of pages) {
+      for (const block of page.blocks || []) {
+        totalBlocks++;
+        const blockConfidence = block.confidence || 1;
+        if (blockConfidence < 0.7) {
+          lowConfidenceBlocks++;
+        }
+      }
+    }
+
+    const ratioLowConfidence = totalBlocks > 0 ? lowConfidenceBlocks / totalBlocks : 0;
+
+    const isLikelyHandwritten = ratioLowConfidence > 0.5; // Ajuste conforme teste
+
+    return {
+      isHandwritten: isLikelyHandwritten,
+      ratioLowConfidence,
+      totalBlocks,
+    };
   } catch (err) {
     console.error("Erro ao detectar manuscrito:", err.message);
-    return false;
+    return { isHandwritten: false, ratioLowConfidence: 0, totalBlocks: 0 };
   }
 }
+
 
 async function extractTextFromPDF(filePath) {
   try {
