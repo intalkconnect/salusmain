@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { swaggerUi, specs, devSpecs } = require("./src/utils/swagger");
+const { swaggerUi, specs } = require("./swagger/swagger");
 const { createBullBoard } = require("@bull-board/api");
 const { ExpressAdapter } = require("@bull-board/express");
 const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");
@@ -22,15 +22,7 @@ app.use("/auth/login", loginRoutes);
 app.use("/upload", uploadRoutes);
 app.use("/estimate", estimateRoutes);
 app.use("/clientes", clientesRoutes);
-// Docs pública
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(specs));
-
-// Docs de desenvolvimento
-app.use("/dev/docs", swaggerUi.serve, swaggerUi.setup(devSpecs));
-
-app.get("/", (req, res) => {
-  res.send("API rodando...");
-});
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
