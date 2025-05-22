@@ -1,55 +1,61 @@
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 
-// 🔗 Configuração padrão (pública)
-const options = {
+// 🔗 Base de definição Swagger
+const baseDefinition = {
+  openapi: "3.0.0",
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+      },
+    },
+  },
+  security: [{ bearerAuth: [] }],
+};
+
+// 📘 Swagger Público
+const publicOptions = {
   definition: {
-    openapi: "3.0.0",
+    ...baseDefinition,
     info: {
       title: "Salus API",
       version: "1.0.0",
     },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-        },
-      },
-    },
-    security: [{ bearerAuth: [] }],
   },
-  apis: ["./src/api/login.js", "./src/api/estimate.js", "./src/api/upload.js"], // Apenas as rotas públicas
+  apis: [
+    "./src/api/login.js",
+    "./src/api/estimate.js",
+    "./src/api/upload.js",
+  ], // ✅ Só as públicas
 };
 
-const specs = swaggerJsdoc(options);
+const specs = swaggerJsdoc(publicOptions);
 
-// 🔗 Configuração para desenvolvimento
+// 🛠️ Swagger para Desenvolvimento
 const devOptions = {
   definition: {
-    openapi: "3.0.0",
+    ...baseDefinition,
     info: {
       title: "Salus API - DEV",
       version: "1.0.0",
-      description: "Documentação extendida para desenvolvimento",
+      description: "Documentação extendida para desenvolvimento e manutenção",
     },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-        },
-      },
-    },
-    security: [{ bearerAuth: [] }],
   },
-  apis: ["./src/api/login.js", "./src/api/estimate.js", "./src/api/clientes.js", "./src/api/upload.js"], // Inclui também as rotas de dev
+  apis: [
+    "./src/api/login.js",
+    "./src/api/estimate.js",
+    "./src/api/upload.js",
+    "./src/api/clientes.js",  // 🔒 Privada
+    "./src/api/health.js",    // 🔒 Privada
+  ],
 };
 
 const devSpecs = swaggerJsdoc(devOptions);
 
 module.exports = {
   swaggerUi,
-  specs,
-  devSpecs,
+  specs,     // /docs
+  devSpecs,  // /dev/docs
 };
