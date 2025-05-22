@@ -19,7 +19,7 @@ const options = {
     },
     security: [{ bearerAuth: [] }],
   },
-  apis: ["./src/api/*.js"], // Apenas as rotas públicas
+  apis: ["./src/api/login.js", "./src/api/estimate.js", "./src/api/upload.js"], // Apenas as rotas públicas
 };
 
 const specs = swaggerJsdoc(options);
@@ -43,7 +43,7 @@ const devOptions = {
     },
     security: [{ bearerAuth: [] }],
   },
-  apis: ["./src/api/*.js", "./src/api/dev/*.js"], // Inclui também as rotas de dev
+  apis: ["./src/api/login.js", "./src/api/estimate.js", "./src/api/clientes.js", "./src/api/upload.js"], // Inclui também as rotas de dev
 };
 
 const devSpecs = swaggerJsdoc(devOptions);
