@@ -1,3 +1,69 @@
+/**
+ * @swagger
+ * /estimate/{job_id}:
+ *   get:
+ *     summary: Consulta o status e resultado de um job
+ *     description: Retorna o status (em processamento, concluído, não encontrado ou human) e, se concluído, os dados extraídos (paciente, médico, medicamentos).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: job_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do job para consulta
+ *     responses:
+ *       200:
+ *         description: Resposta com status e, se disponível, os dados processados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 job_id:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                   enum: [em processamento, concluído, não encontrado, human]
+ *                 patient:
+ *                   type: string
+ *                   nullable: true
+ *                 doctor:
+ *                   type: string
+ *                   nullable: true
+ *                 medications:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: object
+ *                     properties:
+ *                       raw_materials:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             active:
+ *                               type: string
+ *                             dose:
+ *                               type: number
+ *                               nullable: true
+ *                             unity:
+ *                               type: string
+ *                       form:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                       posology:
+ *                         type: string
+ *                       quantity:
+ *                         type: integer
+ *                         nullable: true
+ *       403:
+ *         description: Acesso negado (API key global não permitida)
+ *       500:
+ *         description: Erro interno ao buscar dados
+ */
+
 const express = require("express");
 const { supabase } = require("../utils/supabaseClient");
 const { authMiddleware } = require("./auth");
