@@ -25,36 +25,15 @@ const publicOptions = {
     },
   },
   apis: [
-    "./src/api/login.js",
-    "./src/api/estimate.js",
-    "./src/api/upload.js",
-  ], // ✅ Só as públicas
+    "./src/api/*.js"
+  ],
 };
 
 const specs = swaggerJsdoc(publicOptions);
-
-// 🛠️ Swagger para Desenvolvimento
-const devOptions = {
-  definition: {
-    ...baseDefinition,
-    info: {
-      title: "Salus API - DEV",
-      version: "1.0.0",
-      description: "Documentação extendida para desenvolvimento e manutenção",
-    },
-  },
-  apis: [
-    "./src/api/login.js",
-    "./src/api/estimate.js",
-    "./src/api/upload.js",
-    "./src/api/clientes.js",  // 🔒 Privada
-  ],
-};
 
 const devSpecs = swaggerJsdoc(devOptions);
 
 module.exports = {
   swaggerUi,
-  specs,     // /docs
-  devSpecs,  // /dev/docs
+  specs
 };
