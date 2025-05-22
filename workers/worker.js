@@ -1,12 +1,14 @@
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const { supabase } = require("../src/utils/supabaseClient");
+const { createClient } = require("@supabase/supabase-js");
 const { normalizeText, limparTituloMedico } = require("../src/utils/textParser");
 const { callOpenAIWithVision, callOpenAIWithText } = require("../src/utils/openaiHelper");
 const { extractTextFromPDF, isManuscriptImage } = require("../src/utils/fileUtils");
 const { log, error } = require("../src/utils/logger");
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 const connection = {
   connection: {
@@ -20,40 +22,53 @@ const worker = new Worker(
     const { filepath, ext, filename, jobId, clientId, openaiKey } = job.data;
     const startedAt = new Date();
 
+    const tempFilePath = filepath;
+
     try {
       log(`📥 Processando job ${jobId}`);
 
-      if (!fs.existsSync(filepath)) {
-        throw new Error(`Arquivo não encontrado: ${filepath}`);
+      // 🔍 Valida se o arquivo existe no tmp
+      if (!fs.existsSync(tempFilePath)) {
+        throw new Error(`Arquivo não encontrado em ${tempFilePath}`);
       }
 
+      // 🔥 Registra como processamento iniciado
       await logJobMetric(clientId, jobId, ext, "processing", null, startedAt, null);
 
-      const extClean = path.extname(filepath).toLowerCase();
+      const extClean = path.extname(tempFilePath).toLowerCase();
       let result;
 
       if ([".jpg", ".jpeg", ".png"].includes(extClean)) {
-        const isManuscript = await isManuscriptImage(filepath);
+        const isManuscript = await isManuscriptImage(tempFilePath);
         if (isManuscript) {
-          await logJobMetric(clientId, jobId, ext, "human", "manuscrito", startedAt, new Date());
+          await logJobMetric(clientId, jobId, ext, "human", "manuscrito identificado", startedAt, new Date());
+          log(`👤 Job ${jobId} marcado como HUMAN — manuscrito identificado`);
           return;
         }
-        result = await callOpenAIWithVision(filepath, openaiKey, jobId);
+
+        log("🧠 Enviando imagem para OpenAI Vision...");
+        result = await callOpenAIWithVision(tempFilePath, openaiKey, jobId);
       } else if (extClean === ".pdf") {
-        const { text } = await extractTextFromPDF(filepath);
+        log("📄 Extraindo texto de PDF...");
+        const { text } = await extractTextFromPDF(tempFilePath);
         if (!text || text.trim().length < 30) {
-          await logJobMetric(clientId, jobId, ext, "human", "PDF ilegível", startedAt, new Date());
+          await logJobMetric(clientId, jobId, ext, "human", "PDF com pouco texto ou ilegível", startedAt, new Date());
+          log(`👤 Job ${jobId} marcado como HUMAN — PDF ilegível`);
           return;
         }
+        log("🧠 Enviando texto de PDF para OpenAI...");
         result = await callOpenAIWithText(text, openaiKey, jobId);
       } else {
         throw new Error("Formato de arquivo não suportado.");
       }
 
       if (result.status === "human") {
-        await logJobMetric(clientId, jobId, ext, "human", "ilegível", startedAt, new Date());
+        await logJobMetric(clientId, jobId, ext, "human", "manuscrito ou ilegível", startedAt, new Date());
+        log(`👤 Job ${jobId} marcado como HUMAN — revisão manual necessária`);
         return;
       }
+
+      log("✅ Resultado da IA recebido");
 
       const patient = normalizeText(result.patient || "");
       const doctor = limparTituloMedico(result.doctor || "");
@@ -96,58 +111,69 @@ const worker = new Worker(
       }
 
       await logJobMetric(clientId, jobId, ext, "sucesso", null, startedAt, new Date());
-
-      await uploadToBucketAndDeleteTemp(filepath, filename);
-      log(`✅ Job ${jobId} concluído e arquivo salvo no bucket.`);
-
+      log(`✅ Job ${jobId} concluído com sucesso`);
     } catch (err) {
       error(`❌ Erro no job ${jobId}:`, err);
-      await logJobMetric(clientId, jobId, ext, "falha", err.message, startedAt, new Date());
+      await logJobMetric(clientId, jobId, ext, "falha", err.message?.slice(0, 200), startedAt, new Date());
+    } finally {
+      // 🔥 Faz upload para o bucket após processar
+      try {
+        const fileData = fs.readFileSync(tempFilePath);
+        const { error: uploadError } = await supabase.storage
+          .from("uploads")
+          .upload(filename, fileData, {
+            contentType: ext === "pdf" ? "application/pdf" : `image/${ext}`,
+            upsert: true,
+          });
+
+        if (uploadError) {
+          error(`❌ Falha ao enviar para bucket: ${uploadError.message}`);
+        } else {
+          log(`📤 Arquivo enviado para o bucket: ${filename}`);
+        }
+      } catch (uploadErr) {
+        error(`❌ Erro no upload para bucket: ${uploadErr.message}`);
+      }
+
+      // 🔥 Remove o arquivo temporário
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          log(`🧹 Arquivo temporário removido: ${tempFilePath}`);
+        }
+      } catch (unlinkErr) {
+        error(`❌ Falha ao remover arquivo temporário: ${unlinkErr.message}`);
+      }
     }
   },
   connection
 );
 
-async function uploadToBucketAndDeleteTemp(filepath, filename) {
-  const bucket = process.env.SUPABASE_BUCKET;
-  const bucketPath = `uploads/${filename}`;
-
-  const fileBuffer = fs.readFileSync(filepath);
-
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(bucketPath, fileBuffer, {
-      cacheControl: "3600",
-      upsert: true,
-    });
-
-  if (uploadError) {
-    throw new Error(`Erro no upload para o bucket: ${uploadError.message}`);
-  }
-
-  try {
-    fs.unlinkSync(filepath);
-    log(`🗑️ Arquivo temporário ${filename} removido após upload.`);
-  } catch (err) {
-    error(`❌ Erro ao remover arquivo temporário: ${err.message}`);
-  }
-}
-
+// 🔧 Função de log no banco
 async function logJobMetric(clientId, jobId, fileType, status, errorType = null, startedAt = null, endedAt = null) {
-  const { data: existing } = await supabase
+  const { data: existing, error: fetchError } = await supabase
     .from("job_metrics")
     .select("id")
     .eq("job_id", jobId)
     .maybeSingle();
 
+  if (fetchError) {
+    error("❌ Erro ao buscar job_metrics:", fetchError);
+    return;
+  }
+
   if (existing) {
-    await supabase.from("job_metrics").update({
+    const { error: updateError } = await supabase.from("job_metrics").update({
       status,
       error_type: errorType,
       ended_at: endedAt,
     }).eq("job_id", jobId);
+
+    if (updateError) {
+      error("❌ Erro ao atualizar job_metrics:", updateError);
+    }
   } else {
-    await supabase.from("job_metrics").insert({
+    const { error: insertError } = await supabase.from("job_metrics").insert({
       client_id: clientId,
       job_id: jobId,
       file_type: fileType,
@@ -157,5 +183,9 @@ async function logJobMetric(clientId, jobId, fileType, status, errorType = null,
       ended_at: endedAt,
       created_at: new Date().toISOString(),
     });
+
+    if (insertError) {
+      error("❌ Erro ao inserir em job_metrics:", insertError);
+    }
   }
 }
