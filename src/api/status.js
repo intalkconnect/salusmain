@@ -72,6 +72,16 @@ const { authMiddleware } = require("./auth");
 
 const router = express.Router();
 
+// Função para limpar caracteres especiais problemáticos
+function sanitizeString(str) {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/[^a-zA-Z0-9\s.,/()-]/g, "") // Permite letras, números, espaços e alguns símbolos seguros
+    .trim();
+}
+
 router.get("/:job_id", authMiddleware, async (req, res) => {
   const jobId = req.params.job_id;
   const client = req.client;
@@ -126,7 +136,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
     }
 
     medications[medName].raw_materials.push({
-      active: r.active,
+      active: sanitizeString(r.active), // ✅ Limpeza aplicada aqui
       dose: r.dose,
       unity: r.unity,
     });
@@ -142,3 +152,4 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
