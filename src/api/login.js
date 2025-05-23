@@ -66,11 +66,14 @@ router.post("/", async (req, res) => {
     return res.status(403).json({ detail: "API key inválida ou cliente inativo" });
   }
 
-  const token = jwt.sign(
-    { client_id: client.id },
-    SECRET,
-    { expiresIn: "7d" }
-  );
+  const payload = {
+    client_id: client.id,
+    is_global: client.is_global
+  };
+
+  const token = client.is_global
+    ? jwt.sign(payload, SECRET) // 🔥 Global -> Sem expiração
+    : jwt.sign(payload, SECRET, { expiresIn: "7d" }); // 🔐 Outros -> 7 dias
 
   res.json({ token });
 });
