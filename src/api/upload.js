@@ -39,7 +39,6 @@ const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
 const { processJobQueue } = require("../jobs/processJob");
 const { authMiddleware } = require("./auth");
-const { supabase } = require("../utils/supabaseClient");
 
 const router = express.Router();
 const upload = multer({ dest: "uploads_tmp/" }); // Somente pasta temporária
