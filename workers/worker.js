@@ -135,9 +135,9 @@ const worker = new Worker(
         };
 
         await s3.send(new PutObjectCommand(uploadParams));
-        log(`📤 Arquivo enviado para o bucket MinIO: ${filename}`);
+        log(`📤 Arquivo enviado para o bucket: ${filename}`);
       } catch (uploadErr) {
-        error(`❌ Erro no upload para MinIO: ${uploadErr.message}`);
+        error(`❌ Erro no upload para o bucket: ${uploadErr.message}`);
       }
 
       // 🔥 Remove o arquivo temporário
