@@ -13,6 +13,12 @@ const baseDefinition = {
     },
   },
   security: [{ bearerAuth: [] }],
+  servers: [
+    {
+      url: "https://salus-api.dkdevs.com.br",
+      description: "Produção",
+    },
+  ],
 };
 
 // 📘 Swagger Público
@@ -20,12 +26,13 @@ const publicOptions = {
   definition: {
     ...baseDefinition,
     info: {
-      title: "Salus API",
+      title: "SalusAPI",
       version: "1.0.0",
+      description: "Documentação da SalusAPI",
     },
   },
   apis: [
-    "./src/api/*.js"
+    "./src/api/*.js" // Caminho para os arquivos com os comentários Swagger
   ],
 };
 
