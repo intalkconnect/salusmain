@@ -157,7 +157,7 @@ const worker = new Worker(
 // 🔧 Função de log no banco
 async function logJobMetric(clientId, jobId, fileType, status, errorType = null, startedAt = null, endedAt = null) {
   const { data: existing, error: fetchError } = await supabase
-    .from("salus.job_metrics")
+    .from("job_metrics")
     .select("id")
     .eq("job_id", jobId)
     .maybeSingle();
