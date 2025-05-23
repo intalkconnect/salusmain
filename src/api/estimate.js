@@ -4,6 +4,8 @@
  *   get:
  *     summary: Consulta o status e resultado de um job
  *     description: Retorna o status (em processamento, concluído, não encontrado ou human) e, se concluído, os dados extraídos (paciente, médico, medicamentos).
+ *     tags:
+ *       - Status
  *     security:
  *       - bearerAuth: []
  *     parameters:
