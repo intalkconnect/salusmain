@@ -75,7 +75,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
   const client = req.client;
 
   const { data: rows, error } = await supabase
-    .from("salus.recipe_lines")
+    .from("recipe_lines")
     .select("*")
     .eq("job_id", jobId)
     .eq("client_id", client.id)
@@ -89,7 +89,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
 
   if (!rows || rows.length === 0) {
     const { data: jobMetric } = await supabase
-      .from("salus.job_metrics")
+      .from("job_metrics")
       .select("status")
       .eq("job_id", jobId)
       .maybeSingle();
