@@ -278,6 +278,52 @@ router.patch("/:id", authMiddleware, async (req, res) => {
   res.json(cliente);
 });
 
+/**
+ * @swagger
+ * /clientes/metrics:
+ *   get:
+ *     summary: Retorna métricas dos jobs processados
+ *     description: Permite visualizar quantidade de jobs, sucesso, falha, tempo médio e agrupamento por tipo de arquivo e tipo de erro.
+ *     security:
+ *       - bearerAuth: []
+ *     tags:
+ *       - Métricas
+ *     responses:
+ *       200:
+ *         description: Métricas retornadas com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total_jobs:
+ *                   type: integer
+ *                   example: 100
+ *                 sucessos:
+ *                   type: integer
+ *                   example: 80
+ *                 falhas:
+ *                   type: integer
+ *                   example: 20
+ *                 por_tipo_arquivo:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: integer
+ *                   example: { pdf: 50, jpg: 30, png: 20 }
+ *                 por_tipo_erro:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: integer
+ *                   example: { "arquivo_invalido": 5, "timeout_openai": 10 }
+ *                 tempo_medio_processamento_segundos:
+ *                   type: number
+ *                   example: 12.5
+ *       403:
+ *         description: Apenas API keys globais podem acessar este endpoint.
+ *       500:
+ *         description: Erro interno ao buscar métricas.
+ */
+
 // GET /clientes/metrics
 router.get("/metrics", authMiddleware, async (req, res) => {
   const client = req.client;
