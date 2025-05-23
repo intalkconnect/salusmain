@@ -3,7 +3,7 @@
  * /status/{job_id}:
  *   get:
  *     summary: Consulta o status e resultado de um job
- *     description: Retorna o status (em processamento, concluído, não encontrado ou human) e, se concluído, os dados extraídos (paciente, médico, medicamentos).
+ *     description: Retorna o status (in processing, success, not found ou human) e, se concluído, os dados extraídos (paciente, médico, medicamentos).
  *     tags:
  *       - Status
  *     security:
@@ -27,7 +27,7 @@
  *                   type: string
  *                 status:
  *                   type: string
- *                   enum: [em processamento, concluído, não encontrado, human]
+ *                   enum: [in processing, success, not found, human]
  *                 patient:
  *                   type: string
  *                   nullable: true
@@ -100,12 +100,12 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
       return res.json({ job_id: jobId, status: jobMetric.status });
     }
 
-    return res.json({ job_id: jobId, status: "não encontrado" });
+    return res.json({ job_id: jobId, status: "not found" });
   }
 
   const anyPending = rows.some((r) => !r.processed);
   if (anyPending) {
-    return res.json({ job_id: jobId, status: "em processamento" });
+    return res.json({ job_id: jobId, status: "in processing" });
   }
 
   const patient = rows[0]?.patient || null;
@@ -134,7 +134,7 @@ router.get("/:job_id", authMiddleware, async (req, res) => {
 
   res.json({
     job_id: jobId,
-    status: "concluido",
+    status: "success",
     patient,
     doctor,
     medications,
