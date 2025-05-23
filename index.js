@@ -11,7 +11,7 @@ const loginRoutes = require("./src/api/login");
 const { processJobQueue } = require("./src/jobs/processJob");
 
 const uploadRoutes = require("./src/api/upload");
-const estimateRoutes = require("./src/api/estimate");
+const statuseRoutes = require("./src/api/status");
 const clientesRoutes = require("./src/api/clientes");
 
 const app = express();
@@ -20,7 +20,7 @@ app.use(express.json());
 
 app.use("/auth/login", loginRoutes);
 app.use("/upload", uploadRoutes);
-app.use("/estimate", estimateRoutes);
+app.use("/status", statuseRoutes);
 app.use("/clientes", clientesRoutes);
 // Docs pública
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(specs));
