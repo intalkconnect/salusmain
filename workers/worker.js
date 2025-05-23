@@ -17,11 +17,12 @@ const connection = {
 };
 
 const BUCKET_NAME = process.env.MINIO_BUCKET;
+const openaiKey = process.env.OPENAI_API_KEY
 
 const worker = new Worker(
   "process_job",
   async (job) => {
-    const { filepath, ext, filename, jobId, clientId, openaiKey } = job.data;
+    const { filepath, ext, filename, jobId, clientId } = job.data;
     const startedAt = new Date();
     const tempFilePath = filepath;
 
