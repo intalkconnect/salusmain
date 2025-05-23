@@ -2,7 +2,19 @@
  * @swagger
  * /upload:
  *   post:
- *     summary: Faz upload de arquivo (FormData ou URL)
+ *     summary: Faz upload de um arquivo para processamento
+ *     tags:
+ *       - Upload
+ *     description: |
+ *       Este endpoint permite enviar um arquivo (PDF, JPG, JPEG ou PNG) para ser processado. 
+ *       O envio pode ser feito de duas formas:
+ *       
+ *       - **Upload de arquivo** via `multipart/form-data` (campo `file`).
+ *       - **Envio por URL** via JSON (campo `file_url`).
+ *       
+ *       Após o envio, um job é criado e processado de forma assíncrona. Acompanhe o status usando o `job_id` retornado.
+ *       
+ *       ⚠️ Apenas clientes (API keys não globais) podem fazer uploads.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -15,20 +27,37 @@
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: Arquivo para upload (PDF, JPG, JPEG, PNG)
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - file_url
  *             properties:
  *               file_url:
  *                 type: string
  *                 format: uri
+ *                 description: URL pública de um arquivo para download e processamento
  *     responses:
  *       200:
- *         description: Sucesso
+ *         description: Upload realizado com sucesso, job criado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 job_id:
+ *                   type: string
+ *                   description: ID do job criado
+ *                 status:
+ *                   type: string
+ *                   example: em processamento
  *       400:
- *         description: Erro de validação
+ *         description: Nenhum arquivo enviado ou formato inválido
  *       403:
- *         description: Acesso negado
+ *         description: Acesso negado — API Key Global não pode fazer upload
+ *       500:
+ *         description: Erro interno ao processar upload
  */
 
 const express = require("express");
