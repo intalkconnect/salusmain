@@ -139,8 +139,6 @@ async function countJobs(clientId, start, end = null) {
  *             properties:
  *               nome:
  *                 type: string
- *               openai_key:
- *                 type: string
  *               api_key:
  *                 type: string
  *     responses:
@@ -161,11 +159,11 @@ router.post("/", authMiddleware, async (req, res) => {
     return res.status(403).json({ detail: "Apenas global API key pode criar clientes" });
   }
 
-  const { nome, openai_key, api_key } = req.body;
+  const { nome, api_key } = req.body;
 
   // Validação de campos obrigatórios
-  if (!api_key || !openai_key) {
-    return res.status(400).json({ detail: "Campos obrigatórios: api_key e openai_key" });
+  if (!api_key) {
+    return res.status(400).json({ detail: "Campos obrigatórios: api_key" });
   }
 
   // Verificar duplicidade de api_key
@@ -188,7 +186,6 @@ router.post("/", authMiddleware, async (req, res) => {
     {
       id: uuidv4(),
       nome,
-      openai_key,
       api_key,
       ativo: true,
     },
@@ -231,8 +228,6 @@ router.post("/", authMiddleware, async (req, res) => {
  *             type: object
  *             properties:
  *               nome:
- *                 type: string
- *               openai_key:
  *                 type: string
  *               api_key:
  *                 type: string
