@@ -3,15 +3,27 @@
  * /auth/login:
  *   post:
  *     summary: Gera um token JWT baseado em uma API key
+ *     tags:
+ *       - Autenticação
+ *     description: |
+ *       Realiza a autenticação de um cliente a partir da sua API key. 
+ *       Se a API key for válida e o cliente estiver ativo, retorna um token JWT que deve ser usado para autenticar futuras requisições nos endpoints protegidos.
+ *       
+ *       O token gerado é válido por 7 dias.
+ *       
+ *       ⚠️ Atenção: Apenas clientes ativos podem gerar tokens.
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - api_key
  *             properties:
  *               api_key:
  *                 type: string
+ *                 description: A API key do cliente
  *     responses:
  *       200:
  *         description: JWT gerado com sucesso
@@ -22,8 +34,11 @@
  *               properties:
  *                 token:
  *                   type: string
+ *                   description: O token JWT que deve ser usado para autenticação nas próximas requisições
+ *       400:
+ *         description: API key não fornecida
  *       403:
- *         description: API key inválida ou inativa
+ *         description: API key inválida ou cliente inativo
  */
 
 const express = require("express");
