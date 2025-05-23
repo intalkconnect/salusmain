@@ -57,7 +57,6 @@ router.delete("/:id", authMiddleware, async (req, res) => {
  * /clientes:
  *   get:
  *     summary: Lista todos os clientes
- *     description: Retorna a lista de todos os clientes cadastrados. Inclui dados de uso dos últimos 30 dias, do mês atual e do mês anterior. Restrito a API Keys globais.
  *     tags:
  *       - Clientes
  *     security:
