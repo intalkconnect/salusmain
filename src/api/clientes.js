@@ -10,6 +10,9 @@ const router = express.Router();
  * /clientes/{id}:
  *   delete:
  *     summary: Exclui um cliente
+ *     description: Exclui permanentemente um cliente do sistema. Restrito a API Keys globais.
+ *     tags:
+ *       - Clientes
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -54,9 +57,12 @@ router.delete("/:id", authMiddleware, async (req, res) => {
  * /clientes:
  *   get:
  *     summary: Lista todos os clientes
+ *     description: Retorna a lista de todos os clientes cadastrados. Inclui dados de uso dos últimos 30 dias, do mês atual e do mês anterior. Restrito a API Keys globais.
+ *     tags:
+ *       - Clientes
  *     security:
  *       - bearerAuth: []
- *     description: Somente acessível por API key global. Retorna todos os clientes e estatísticas de uso (últimos 30 dias, mês atual e mês anterior).
+ *     description: Retorna todos os clientes e estatísticas de uso (últimos 30 dias, mês atual e mês anterior). Restrito a API Keys globais.
  *     responses:
  *       200:
  *         description: Lista de clientes
@@ -117,6 +123,9 @@ async function countJobs(clientId, start, end = null) {
  * /clientes:
  *   post:
  *     summary: Cria um novo cliente
+ *     description: Cria um novo cliente com as chaves de API necessárias. Restrito a API Keys globais.
+ *     tags:
+ *       - Clientes
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -203,6 +212,9 @@ router.post("/", authMiddleware, async (req, res) => {
  * /clientes/{id}:
  *   patch:
  *     summary: Atualiza um cliente
+ *     description: Atualiza as informações de um cliente existente, como nome, status (ativo/inativo) e suas chaves API. Restrito a API Keys globais.
+ *     tags:
+ *       - Clientes
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -283,7 +295,7 @@ router.patch("/:id", authMiddleware, async (req, res) => {
  * /clientes/metrics:
  *   get:
  *     summary: Retorna métricas dos jobs processados
- *     description: Permite visualizar quantidade de jobs, sucesso, falha, tempo médio e agrupamento por tipo de arquivo e tipo de erro.
+ *     description: Permite visualizar quantidade de jobs, sucesso, falha, tempo médio e agrupamento por tipo de arquivo e tipo de erro. Restrito a API Keys globais.
  *     security:
  *       - bearerAuth: []
  *     tags:
