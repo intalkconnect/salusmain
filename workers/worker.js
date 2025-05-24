@@ -11,7 +11,7 @@ const path = require("path");
 const fs = require("fs");
 
 // Configurações
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 const QUEUE = 'process_job';
 const BUCKET_NAME = process.env.MINIO_BUCKET;
 const openaiKey = process.env.OPENAI_API_KEY;
