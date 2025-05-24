@@ -4,11 +4,8 @@ const cors = require("cors");
 const { swaggerUi, specs } = require("./swagger/swagger");
 const { createBullBoard } = require("@bull-board/api");
 const { ExpressAdapter } = require("@bull-board/express");
-const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");
 
 const loginRoutes = require("./src/api/login");
-
-const { processJobQueue } = require("./src/jobs/processJob");
 
 const uploadRoutes = require("./src/api/upload");
 const statuseRoutes = require("./src/api/status");
@@ -32,17 +29,6 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
-
-// Bull Board moderno
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath("/admin/queues");
-
-createBullBoard({
-  queues: [new BullMQAdapter(processJobQueue)],
-  serverAdapter,
-});
-
-app.use("/admin/queues", serverAdapter.getRouter());
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
