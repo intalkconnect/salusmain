@@ -1,6 +1,6 @@
 const amqp = require('amqplib');
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost';
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 
 async function sendToQueue(queue, message) {
   const connection = await amqp.connect(RABBITMQ_URL);
