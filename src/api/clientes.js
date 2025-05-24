@@ -337,9 +337,13 @@ router.get("/metrics", authMiddleware, async (req, res) => {
     return res.status(403).json({ detail: "Apenas global API key pode acessar métricas" });
   }
 
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
   const { data: rows, error } = await supabase
     .from("job_metrics")
     .select("*")
+    .gte("created_at", currentMonthStart) // 🔥 Filtro para o mês atual
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -380,12 +384,145 @@ router.get("/metrics", authMiddleware, async (req, res) => {
 
   res.json({
     total_jobs: total,
-    sucessos: success,
-    falhas: fail,
-    por_tipo_arquivo: byType,
-    por_tipo_erro: byError,
-    tempo_medio_processamento_segundos: avgProcessingTimeSec,
+    success: success,
+    failures: fail,
+    by_file_type: byType,
+    by_error_type: byError,
+    avg_processing_time_seconds: avgProcessingTimeSec,
   });
 });
+
+/**
+ * @swagger
+ * /clientes/{id}/metrics:
+ *   get:
+ *     summary: Retorna métricas dos jobs processados para um cliente
+ *     description: Permite visualizar quantidade de jobs, sucesso, falha, tempo médio e agrupamento por tipo de arquivo e tipo de erro no mês atual, além do total de jobs no mês anterior. Restrito a API Keys globais.
+ *     security:
+ *       - bearerAuth: []
+ *     tags:
+ *       - Métricas
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do cliente
+ *     responses:
+ *       200:
+ *         description: Métricas retornadas com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total_jobs:
+ *                   type: integer
+ *                 success:
+ *                   type: integer
+ *                 failures:
+ *                   type: integer
+ *                 by_file_type:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: integer
+ *                 by_error_type:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: integer
+ *                 avg_processing_time_seconds:
+ *                   type: number
+ *                 total_jobs_prev_month:
+ *                   type: integer
+ *       403:
+ *         description: Acesso negado
+ *       500:
+ *         description: Erro interno
+ */
+
+// GET /clientes/:id/metrics
+router.get("/:id/metrics", authMiddleware, async (req, res) => {
+  const client = req.client;
+  if (!client.is_global) {
+    return res.status(403).json({ detail: "Only global API key can access metrics." });
+  }
+
+  const client_id = req.params.id;
+
+  const now = new Date();
+
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  // Buscar dados do mês atual
+  const { data: currentRows, error: errorCurrent } = await supabase
+    .from("job_metrics")
+    .select("*")
+    .eq("client_id", client_id)
+    .gte("created_at", currentMonthStart.toISOString())
+    .lte("created_at", now.toISOString());
+
+  if (errorCurrent) {
+    return res.status(500).json({ detail: "Error fetching current month metrics.", error: errorCurrent });
+  }
+
+  // Buscar apenas total do mês anterior
+  const { count: previousCount, error: errorPrevious } = await supabase
+    .from("job_metrics")
+    .select("*", { count: "exact", head: true })
+    .eq("client_id", client_id)
+    .gte("created_at", previousMonthStart.toISOString())
+    .lte("created_at", previousMonthEnd.toISOString());
+
+  if (errorPrevious) {
+    return res.status(500).json({ detail: "Error fetching previous month metrics.", error: errorPrevious });
+  }
+
+  // Processar dados do mês atual
+  const total = currentRows.length;
+  const success = currentRows.filter((r) => r.status === "sucesso").length;
+  const failures = total - success;
+
+  const byFileType = {};
+  const byErrorType = {};
+
+  let totalDuration = 0;
+  let countWithTime = 0;
+
+  for (const r of currentRows) {
+    const type = r.file_type || "unknown";
+    byFileType[type] = (byFileType[type] || 0) + 1;
+
+    if (r.status === "falha") {
+      const err = r.error_type || "unknown_error";
+      byErrorType[err] = (byErrorType[err] || 0) + 1;
+    }
+
+    if (r.started_at && r.ended_at) {
+      const start = new Date(r.started_at).getTime();
+      const end = new Date(r.ended_at).getTime();
+      const diff = (end - start) / 1000;
+      if (!isNaN(diff)) {
+        totalDuration += diff;
+        countWithTime++;
+      }
+    }
+  }
+
+  const avgProcessingTimeSec = countWithTime > 0 ? totalDuration / countWithTime : null;
+
+  res.json({
+    total_jobs: total,
+    success: success,
+    failures: failures,
+    by_file_type: byFileType,
+    by_error_type: byErrorType,
+    avg_processing_time_seconds: avgProcessingTimeSec,
+    total_jobs_prev_month: previousCount || 0,
+  });
+});
+
 
 module.exports = router;
