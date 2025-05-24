@@ -66,9 +66,8 @@ const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
-const { processJobQueue } = require("../jobs/processJob");
 const { authMiddleware } = require("./auth");
-
+const { sendToQueue } = require('../jobs/rabbitmqClient');
 const router = express.Router();
 const upload = multer({ dest: "uploads_tmp/" }); // Somente pasta temporária
 
@@ -110,14 +109,14 @@ router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
       return res.status(400).json({ detail: "Nenhum arquivo enviado." });
     }
 
-    await processJobQueue.add("process_job", {
-      filepath,
-      ext,
-      filename,
-      jobId,
-      clientId: client.id,
-      openaiKey: client.openai_key,
-    });
+    await sendToQueue('process_job', {
+  filepath,
+  ext,
+  filename,
+  jobId,
+  clientId: client.id,
+  openaiKey: client.openai_key,
+});
 
     res.json({ job_id: jobId, status: "em processamento" });
 
