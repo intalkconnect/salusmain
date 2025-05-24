@@ -74,10 +74,6 @@ const upload = multer({ dest: "uploads_tmp/" }); // Somente pasta temporária
 router.post("/", authMiddleware, upload.single("file"), async (req, res) => {
   const client = req.client;
 
-  if (client.is_global) {
-    return res.status(403).json({ detail: "Global API key não autorizada para upload" });
-  }
-
   const jobId = uuidv4();
   let filepath, ext, filename;
 
