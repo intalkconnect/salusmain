@@ -451,13 +451,12 @@ router.get("/:id/metrics", authMiddleware, async (req, res) => {
   const client_id = req.params.id;
 
   const now = new Date();
-
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  // Buscar dados do mês atual
-  const { data: currentRows, error: errorCurrent } = await supabase
+  // Buscar job_metrics do mês atual
+  const { data: currentJobs, error: errorCurrent } = await supabase
     .from("job_metrics")
     .select("*")
     .eq("client_id", client_id)
@@ -465,10 +464,10 @@ router.get("/:id/metrics", authMiddleware, async (req, res) => {
     .lte("created_at", now.toISOString());
 
   if (errorCurrent) {
-    return res.status(500).json({ detail: "Error fetching current month metrics.", error: errorCurrent });
+    return res.status(500).json({ detail: "Error fetching current month job metrics.", error: errorCurrent });
   }
 
-  // Buscar apenas total do mês anterior
+  // Buscar job_metrics do mês anterior
   const { count: previousCount, error: errorPrevious } = await supabase
     .from("job_metrics")
     .select("*", { count: "exact", head: true })
@@ -480,18 +479,41 @@ router.get("/:id/metrics", authMiddleware, async (req, res) => {
     return res.status(500).json({ detail: "Error fetching previous month metrics.", error: errorPrevious });
   }
 
-  // Processar dados do mês atual
-  const total = currentRows.length;
-  const success = currentRows.filter((r) => r.status === "sucesso").length;
+  // Buscar recipe_lines do cliente
+  const { data: recipeLines, error: errorRecipe } = await supabase
+    .from("recipe_lines")
+    .select("id, created_at, form, posology")
+    .eq("client_id", client_id)
+    .gte("created_at", currentMonthStart.toISOString())
+    .lte("created_at", now.toISOString());
+
+  if (errorRecipe) {
+    return res.status(500).json({ detail: "Error fetching recipe lines.", error: errorRecipe });
+  }
+
+  // Processamento das métricas
+  const total = currentJobs.length;
+  const success = currentJobs.filter((r) => r.status === "sucesso").length;
   const failures = total - success;
 
   const byFileType = {};
   const byErrorType = {};
+  const jobsByWeekday = {
+    Sunday: 0,
+    Monday: 0,
+    Tuesday: 0,
+    Wednesday: 0,
+    Thursday: 0,
+    Friday: 0,
+    Saturday: 0,
+  };
 
   let totalDuration = 0;
   let countWithTime = 0;
+  let maxDuration = null;
+  let minDuration = null;
 
-  for (const r of currentRows) {
+  for (const r of currentJobs) {
     const type = r.file_type || "unknown";
     byFileType[type] = (byFileType[type] || 0) + 1;
 
@@ -504,15 +526,45 @@ router.get("/:id/metrics", authMiddleware, async (req, res) => {
       const start = new Date(r.started_at).getTime();
       const end = new Date(r.ended_at).getTime();
       const diff = (end - start) / 1000;
+
       if (!isNaN(diff)) {
         totalDuration += diff;
         countWithTime++;
+
+        if (maxDuration === null || diff > maxDuration) maxDuration = diff;
+        if (minDuration === null || diff < minDuration) minDuration = diff;
       }
+
+      const day = new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'long' });
+      jobsByWeekday[day] = (jobsByWeekday[day] || 0) + 1;
     }
   }
 
   const avgProcessingTimeSec = countWithTime > 0 ? totalDuration / countWithTime : null;
 
+  // Top 10 Formas Farmacêuticas
+  const formCount = {};
+  for (const r of recipeLines) {
+    const form = r.form?.toLowerCase() || "unknown";
+    formCount[form] = (formCount[form] || 0) + 1;
+  }
+  const topForms = Object.entries(formCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([form, count]) => ({ form, count }));
+
+  // Principais Posologias
+  const posologyCount = {};
+  for (const r of recipeLines) {
+    const pos = r.posology?.toLowerCase() || "unknown";
+    posologyCount[pos] = (posologyCount[pos] || 0) + 1;
+  }
+  const topPosologies = Object.entries(posologyCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([posology, count]) => ({ posology, count }));
+
+  // Resultado final
   res.json({
     total_jobs: total,
     success: success,
@@ -520,9 +572,15 @@ router.get("/:id/metrics", authMiddleware, async (req, res) => {
     by_file_type: byFileType,
     by_error_type: byErrorType,
     avg_processing_time_seconds: avgProcessingTimeSec,
+    max_processing_time_seconds: maxDuration,
+    min_processing_time_seconds: minDuration,
     total_jobs_prev_month: previousCount || 0,
+    jobs_by_weekday: jobsByWeekday,
+    top_forms: topForms,
+    top_posologies: topPosologies,
   });
 });
+
 
 
 module.exports = router;
